@@ -28,15 +28,68 @@ FONT_SIZE_FORTUNE = 18  # Font size for the displayed fortune
 FONT_SIZE_EXIT = 14
 
 
-# Colors configuration for the 6 buttons
-COLORS = [
-    {"name": "RED", "rgb": [255, 0, 0]},       # Button 1: RED (3 letters)
-    {"name": "ORANGE", "rgb": [255, 127, 0]},   # Button 2: ORANGE (6 letters)
-    {"name": "YELLOW", "rgb": [255, 255, 0]},   # Button 3: YELLOW (6 letters)
-    {"name": "GREEN", "rgb": [0, 255, 0]},     # Button 4: GREEN (5 letters)
-    {"name": "BLUE", "rgb": [0, 0, 255]},      # Button 5: BLUE (4 letters)
-    {"name": "MAGENTA", "rgb": [255, 0, 255]}   # Button 6: MAGENTA (7 letters)
+# 6 distinct bright colour themes, one colour per button.
+# Each theme contains 6 highly distinct, contrasting colours.
+# The daily seed picks which theme is active for the day.
+THEMES = [
+    # Theme 0 – PRIMARY FLIP
+    [
+        {"name": "RED",     "rgb": [255,   0,   0]},   # Button 1
+        {"name": "GREEN",   "rgb": [  0, 230,  50]},   # Button 2
+        {"name": "BLUE",    "rgb": [  0, 100, 255]},   # Button 3
+        {"name": "YELLOW",  "rgb": [255, 230,   0]},   # Button 4
+        {"name": "ORANGE",  "rgb": [255, 120,   0]},   # Button 5
+        {"name": "PURPLE",  "rgb": [160,   0, 240]},   # Button 6
+    ],
+    # Theme 1 – NEON GLOW
+    [
+        {"name": "CYAN",    "rgb": [  0, 255, 255]},   # Button 1
+        {"name": "MAGENTA", "rgb": [255,   0, 255]},   # Button 2
+        {"name": "LIME",    "rgb": [ 50, 255,   0]},   # Button 3
+        {"name": "ORANGE",  "rgb": [255, 140,   0]},   # Button 4
+        {"name": "VIOLET",  "rgb": [140,   0, 255]},   # Button 5
+        {"name": "YELLOW",  "rgb": [255, 255,   0]},   # Button 6
+    ],
+    # Theme 2 – RETRO ARCADE
+    [
+        {"name": "PINK",    "rgb": [255,  50, 150]},   # Button 1
+        {"name": "TEAL",    "rgb": [  0, 200, 180]},   # Button 2
+        {"name": "AMBER",   "rgb": [255, 180,   0]},   # Button 3
+        {"name": "COBALT",  "rgb": [  0,  60, 255]},   # Button 4
+        {"name": "RED",     "rgb": [240,   0,  50]},   # Button 5
+        {"name": "MINT",    "rgb": [ 80, 240, 150]},   # Button 6
+    ],
+    # Theme 3 – TROPICAL WAVE
+    [
+        {"name": "CORAL",   "rgb": [255,  90,  60]},   # Button 1
+        {"name": "TURQ",    "rgb": [  0, 220, 220]},   # Button 2
+        {"name": "GOLD",    "rgb": [255, 200,   0]},   # Button 3
+        {"name": "JUNGLE",  "rgb": [  0, 180,  60]},   # Button 4
+        {"name": "ROSE",    "rgb": [255, 100, 180]},   # Button 5
+        {"name": "INDIGO",  "rgb": [ 90,  30, 240]},   # Button 6
+    ],
+    # Theme 4 – CYBERPUNK
+    [
+        {"name": "PURPLE",  "rgb": [120,   0, 255]},   # Button 1
+        {"name": "GREEN",   "rgb": [  0, 255, 100]},   # Button 2
+        {"name": "RED",     "rgb": [255,  20,  50]},   # Button 3
+        {"name": "BLUE",    "rgb": [  0, 200, 255]},   # Button 4
+        {"name": "YELLOW",  "rgb": [255, 220,   0]},   # Button 5
+        {"name": "MAGENTA", "rgb": [255,   0, 180]},   # Button 6
+    ],
+    # Theme 5 – FESTIVAL NIGHTS
+    [
+        {"name": "ROSE",    "rgb": [255,  20, 120]},   # Button 1
+        {"name": "AQUA",    "rgb": [  0, 240, 200]},   # Button 2
+        {"name": "FLAME",   "rgb": [255,  80,   0]},   # Button 3
+        {"name": "VIOLET",  "rgb": [180,  30, 255]},   # Button 4
+        {"name": "LIME",    "rgb": [150, 255,   0]},   # Button 5
+        {"name": "SKY",     "rgb": [ 50, 150, 255]},   # Button 6
+    ],
 ]
+
+# COLORS will be set at runtime via _pick_daily_theme()
+COLORS = THEMES[0]
 
 BUTTON_NUM_TO_NAME = {
     1: "UP",
@@ -178,6 +231,9 @@ class FortuneTellerApp(app.App):
         self.state = "COLOR_SELECTION"
         self.is_running = True
         self._render_update = None
+
+        # Pick today's colour theme using the daily seed
+        self._pick_daily_theme()
         
         # State variables
         self.selected_color_idx = 0
@@ -195,6 +251,7 @@ class FortuneTellerApp(app.App):
         self.folds_target = 0
         self.next_state_after_animation = "NUMBER_SELECTION"
         self.pressed_button = 1  # Track which button initiated the fold
+        self.fold_base_angle = 0.0  # Running rotation offset for the folding animation
         
         # Exit/Cancel hold tracking
         self.cancel_is_held = False
@@ -204,6 +261,15 @@ class FortuneTellerApp(app.App):
         # Register events
         eventbus.on(ButtonDownEvent, self._handle_buttondown, self)
         eventbus.on(ButtonUpEvent, self._handle_buttonup, self)
+
+    def _pick_daily_theme(self):
+        """Select a theme from THEMES using today's daily seed."""
+        global COLORS
+        uid = get_unique_id()
+        y, m, d = get_current_date()
+        seed = make_daily_seed(uid, y, m, d)
+        theme_idx = seed % len(THEMES)
+        COLORS = THEMES[theme_idx]
 
     def minimise(self):
         from system.scheduler.events import RequestStopAppEvent
@@ -303,6 +369,7 @@ class FortuneTellerApp(app.App):
         self.folds_target = len(self.selected_color_name)
         self.folds_count = 0
         self.anim_time = 0.0
+        self.fold_base_angle = 0.0  # Reset rotation for new fold sequence
         
         if self.folds_target % 2 == 0:
             self.visible_numbers = [2, 4, 6, 8, 10, 12]
@@ -318,6 +385,7 @@ class FortuneTellerApp(app.App):
         self.folds_target = self.selected_number
         self.folds_count = 0
         self.anim_time = 0.0
+        self.fold_base_angle = 0.0  # Reset rotation for new fold sequence
         
         uid = get_unique_id()
         y, m, d = get_current_date()
@@ -403,64 +471,70 @@ class FortuneTellerApp(app.App):
         return True
 
     def _draw_folding_animation(self, ctx):
-        p = (self.anim_time % self.fold_duration) / self.fold_duration # 0.0 to 1.0
-        
-        # Smooth ease-in-out cubic scale using math.sin with cubic smoothing
-        # Goes from 0.0 (open) to 1.0 (closed/fully folded) at p=0.5, then back to 0.0 (open) at p=1.0
-        sin_p = math.sin(p * math.pi)
-        t_eased = 1.0 - math.pow(1.0 - sin_p, 3) # Cubic cushion
-        scale = 1.0 - t_eased # 1.0 at start/end (open), 0.0 at midpoint (fully folded/closed)
-        
-        ctx.save()
-        clear_background(ctx)
-        
-        # Fill whole screen with black representing the full size central black hex
-        ctx.rgb(0.0, 0.0, 0.0)
-        ctx.rectangle(-120, -120, 240, 240).fill()
-        
-        # Draw current fold count index or color letter in the center of the screen (underneath triangles)
-        current_fold_index = int(self.anim_time / self.fold_duration) + 1
+        p = (self.anim_time % self.fold_duration) / self.fold_duration  # 0.0 to 1.0
+
+        # Track which fold cycle we are on
+        current_fold_index = int(self.anim_time / self.fold_duration)
         if current_fold_index > self.folds_target:
             current_fold_index = self.folds_target
-            
+
+        # Rotate by 30deg (pi / 6) per iteration. It stays constant during the
+        # cover-and-reveal cycle and only updates when a new iteration starts.
+        rotation_offset = current_fold_index * (math.pi / 6.0)
+
+        # Smooth ease-in-out cubic scale
+        # 1.0 = open (tips at outer radius), 0.0 = fully folded (tips at centre)
+        sin_p = math.sin(p * math.pi)
+        t_eased = 1.0 - math.pow(1.0 - sin_p, 3)  # Cubic cushion
+        scale = 1.0 - t_eased
+
+        ctx.save()
+        clear_background(ctx)
+
+        # Black background
+        ctx.rgb(0.0, 0.0, 0.0)
+        ctx.rectangle(-120, -120, 240, 240).fill()
+
+        # Central character label
+        label_fold_index = current_fold_index + 1
+        if label_fold_index > self.folds_target:
+            label_fold_index = self.folds_target
+
         if self.next_state_after_animation == "NUMBER_SELECTION":
-            # Color folding phase: draw the corresponding letter
-            char_to_draw = self.selected_color_name[current_fold_index - 1]
+            char_to_draw = self.selected_color_name[label_fold_index - 1]
         else:
-            # Number folding phase: draw the index
-            char_to_draw = str(current_fold_index)
-            
+            char_to_draw = str(label_fold_index)
+
         ctx.rgb(1.0, 1.0, 1.0)
         ctx.font_size = FONT_SIZE_COUNT
         ctx.text_align = ctx.CENTER
         ctx.text_baseline = ctx.MIDDLE
         ctx.move_to(0, 0).text(char_to_draw)
-        
-        # Fold in triangles of the color to cover the black background
-        # Triangles are drawn in the selected color, moving from outer edge (scale=1.0)
-        # to the center (scale=0.0) with no border/stroke
+
+        # Folding triangles — rotated by rotation_offset so each iteration's tips
+        # originate from the corners of the previous iteration's hexagon.
         rgb_float = tuple(c / 255.0 for c in self.selected_color_rgb)
         ctx.rgb(*rgb_float)
-        R_outer = 150 # Enlarged to keep chord midpoints outside the circular screen boundary
-        
+        R_outer = 150  # Enlarged to keep base edges outside the circular screen
+
         for i in range(6):
-            theta_left = -math.pi / 2.0 + i * math.pi / 3.0
+            # Base angle for this triangle, advanced by rotation_offset each fold
+            theta_left = rotation_offset + i * math.pi / 3.0
             theta_right = theta_left + math.pi / 3.0
             theta_mid = (theta_left + theta_right) / 2.0
-            
-            # Tip of the folding triangle segment
+
+            # Tip travels from R_outer (open) to 0 (folded)
             r_tip = R_outer * scale
             x_tip = r_tip * math.cos(theta_mid)
             y_tip = r_tip * math.sin(theta_mid)
-            
-            # Fill the triangle flap with no borders
+
             ctx.begin_path()
             ctx.move_to(x_tip, y_tip)
             ctx.line_to(R_outer * math.cos(theta_left), R_outer * math.sin(theta_left))
             ctx.line_to(R_outer * math.cos(theta_right), R_outer * math.sin(theta_right))
             ctx.close_path()
             ctx.fill()
-            
+
         ctx.restore()
 
     def _draw_color_selection(self, ctx):
