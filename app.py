@@ -134,6 +134,13 @@ def get_current_date():
     except Exception:
         return 2026, 6, 4
 
+def date_to_days(year, month, day):
+    if month <= 2:
+        month += 12
+        year -= 1
+    return 365 * year + year // 4 - year // 100 + year // 400 + (153 * month + 2) // 5 + day
+
+
 def make_daily_seed(badge_id, year, month, day):
     h = 5381
     for b in badge_id:
@@ -263,13 +270,33 @@ class FortuneTellerApp(app.App):
         eventbus.on(ButtonUpEvent, self._handle_buttonup, self)
 
     def _pick_daily_theme(self):
-        """Select a theme from THEMES using today's daily seed."""
+        """Select a theme from THEMES using today's daily seed, ensuring no repeats for 3 days."""
         global COLORS
         uid = get_unique_id()
         y, m, d = get_current_date()
-        seed = make_daily_seed(uid, y, m, d)
-        theme_idx = seed % len(THEMES)
-        COLORS = THEMES[theme_idx]
+        if y < 2024:
+            y = 2024
+            
+        d_epoch = date_to_days(2024, 1, 1)
+        d_current = date_to_days(y, m, d)
+        diff = max(0, d_current - d_epoch)
+        
+        # Base seed for the epoch
+        h = 5381
+        for b in uid:
+            h = ((h << 5) + h) + b
+            
+        recent = []
+        for day_step in range(diff + 1):
+            step_seed = (h + day_step) & 0x7FFFFFFF
+            rng = SeededRandom(step_seed)
+            allowed = [idx for idx in range(len(THEMES)) if idx not in recent]
+            theme_idx = rng.choice(allowed)
+            recent.append(theme_idx)
+            if len(recent) > 2:
+                recent.pop(0)
+                
+        COLORS = THEMES[recent[-1]]
 
     def minimise(self):
         from system.scheduler.events import RequestStopAppEvent
