@@ -108,8 +108,8 @@ VILLAGES = [
 TERMS = {
     "SUBJECT": [
         "a new friend", "a rogue robot", "an over-caffeinated volunteer", "a friendly furry",
-        "a mysterious hacker", "Jonty", "a space traveler", "your favorite badge",
-        "a volunteer", "you", "a local DJ", "an event organizer", "a cybernetic creature",
+        "a mysterious hacker", "Jonty", "a space traveler",
+        "a volunteer", "a local DJ", "an event organizer", "a cybernetic creature",
         "a retro gamer", "a BGP router whisperer"
     ],
     "VERB": [
@@ -156,8 +156,8 @@ TERMS = {
         "logic analyzer", "SDR dongle", "microcontroller board"
     ],
     "TECH_TRIVIA": [
-        "BGP peering", "solder joint", "firmware update", "memory leak", "GPIO pin",
-        "custom PCB", "RF frequency", "hexpansion", "BGP routing tables", "SMD soldering techniques",
+        "BGP peering", "solder joints", "firmware updates", "memory leaks", "GPIO pins",
+        "custom PCBs", "RF frequencies", "hexpansions", "BGP routing tables", "SMD soldering techniques",
         "MicroPython garbage collection", "Fourier transforms", "packet switching protocols"
     ],
     "TIME": [
@@ -179,7 +179,7 @@ TEMPLATES = [
     "A session at {VILLAGE} will inspire you to {ACTION}.",
     "You will discover a {ADJECTIVE} {ITEM} while trying to {ACTION}.",
     "Your {DEVICE} will {VERB} {OBJECT} at {DESTINATION}.",
-    "While trying to {ACTION} at {DESTINATION}, your {DEVICE} will compile {OBJECT}.",
+    "While trying to {ACTION} at {DESTINATION}, your {DEVICE} will interface with {OBJECT}.",
     "You will meet {SUBJECT} who will help you {ACTION} at {DESTINATION}.",
     "To {ACTION}, you must first find a {ADJECTIVE} {ITEM}.",
     "If you {ACTION} {TIME}, you will find a {ADJECTIVE} {ITEM} at {DESTINATION}.",
@@ -188,7 +188,7 @@ TEMPLATES = [
     "To avoid {HAZARD}, you should {ACTION} at {DESTINATION}.",
     "Your luckiest moment today will be when you {VERB} {OBJECT} at {DESTINATION}.",
     "{SUBJECT} at {DESTINATION} will offer you a {ITEM} in exchange for debugging assistance.",
-    "You will accidentally drop your {DEVICE} into {OBJECT} at {DESTINATION}.",
+    "You will accidentally drop your {DEVICE} near {OBJECT} at {DESTINATION}.",
     "Your {DEVICE} will start picking up strange signals from {VILLAGE}.",
     "{TIME}, you will spend time attempting to explain {TECH_TRIVIA} to {SUBJECT}.",
     "A mysterious flashing LED at {DESTINATION} is actually a secret message about {TECH_TRIVIA}.",
@@ -208,34 +208,42 @@ TEMPLATES = [
 def format_village(name, context_before):
     name_lower = name.lower().strip()
     
-    # Specific lists of exceptions based on grammatical style
-    prefix_villages = {
-        "all your bass are belong to us",
-        "brittany (the og one)",
-        "loitering within tent",
-        "poorly located progesterone",
-        "stroopwafels & oatcakes"
+    # Proper noun exceptions that don't need prefix/suffix (just quotes)
+    proper_noun_exceptions = {
+        "milliways", "freeside", "ztl", "bench", "com:laag", "d.i.b.s.", "loc", "pilk", 
+        "ignore all prior villages", "bodgeham-on-wye", "glastonledburyshire-on-severn", 
+        "sheffield-by-the-sea", "shrubbery", "sibermerdeka", "tented vias", "threadz 'n' webz", 
+        "tricky disco", "moose", "motley crew", "nadhack", "noobspace", "shonkbot", 
+        "shonkbot-sur-les-roues", "emf ctf", "emf-ix", "err_name_not_resolved", "field-fx", 
+        "gothic valley"
     }
     
-    suffix_villages = {
-        "hack club",
-        "dreamcat & friends",
-        "hacky racers",
-        "party pals",
-        "duck armada",
-        "clockwork bods",
-        "biohackers",
-        "koala makers"
-    }
-    
-    if name_lower in prefix_villages:
-        return f'the village "{name}"'
+    if name_lower in proper_noun_exceptions:
+        return f'"{name}"'
         
-    if name_lower in suffix_villages:
+    # Check if name is self-descriptive (contains town/place words)
+    self_descriptive_words = [
+        "hackspace", "hacklab", "makespace", "makerspace", "make space", "maker space",
+        "consulate", "embassy", "village", "sector", "camp", "lounge", "area", "house", 
+        "room", "hq", "lab", "division", "station", "centre", "center", "ville"
+    ]
+    is_self_descriptive = any(word in name_lower for word in self_descriptive_words)
+    if is_self_descriptive:
+        return f'"{name}"'
+        
+    # Check suffix words for collective/club nouns
+    collective_nouns = [
+        "club", "armada", "commission", "society", "project", "team", "group", 
+        "network", "force", "consortium", "union", "association", "friends", 
+        "bods", "racers", "pals", "gamers", "makers", "biohackers"
+    ]
+    ends_with_collective = any(name_lower.endswith(noun) for noun in collective_nouns)
+    
+    if ends_with_collective:
         return f'the "{name}" village'
         
-    # Default: just put quotes around the village name (e.g. "Milliways", "Scottish Consulate")
-    return f'"{name}"'
+    # Default: prefix with "the village"
+    return f'the village "{name}"'
 
 def fix_a_an(text):
     vowels = "aeiouAEIOU"
