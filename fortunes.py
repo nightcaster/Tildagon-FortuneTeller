@@ -177,17 +177,17 @@ TEMPLATES = [
     "{SUBJECT} should {ACTION} at {DESTINATION}.",
     "Beware of {HAZARD} when you {ACTION} at {DESTINATION}.",
     "A session at {VILLAGE} will inspire you to {ACTION}.",
-    "You will discover {ADJECTIVE} {ITEM} while trying to {ACTION}.",
+    "You will discover a {ADJECTIVE} {ITEM} while trying to {ACTION}.",
     "Your {DEVICE} will {VERB} {OBJECT} at {DESTINATION}.",
     "While trying to {ACTION} at {DESTINATION}, your {DEVICE} will compile {OBJECT}.",
     "You will meet {SUBJECT} who will help you {ACTION} at {DESTINATION}.",
-    "To {ACTION}, you must first find {ADJECTIVE} {ITEM}.",
-    "If you {ACTION} {TIME}, you will find {ADJECTIVE} {ITEM} at {DESTINATION}.",
+    "To {ACTION}, you must first find a {ADJECTIVE} {ITEM}.",
+    "If you {ACTION} {TIME}, you will find a {ADJECTIVE} {ITEM} at {DESTINATION}.",
     "Your {DEVICE} will detect {HAZARD} near {DESTINATION}.",
     "A talk about {TECH_TRIVIA} will explain how to {ACTION}.",
     "To avoid {HAZARD}, you should {ACTION} at {DESTINATION}.",
     "Your luckiest moment today will be when you {VERB} {OBJECT} at {DESTINATION}.",
-    "{SUBJECT} at {DESTINATION} will offer you {ITEM} in exchange for debugging assistance.",
+    "{SUBJECT} at {DESTINATION} will offer you a {ITEM} in exchange for debugging assistance.",
     "You will accidentally drop your {DEVICE} into {OBJECT} at {DESTINATION}.",
     "Your {DEVICE} will start picking up strange signals from {VILLAGE}.",
     "{TIME}, you will spend time attempting to explain {TECH_TRIVIA} to {SUBJECT}.",
@@ -195,12 +195,12 @@ TEMPLATES = [
     "If you visit {DESTINATION} {TIME}, you will be asked to help {SUBJECT} {ACTION}.",
     "{SUBJECT} at {DESTINATION} will help you {ACTION}.",
     "Your {DEVICE} will fail {TIME} due to {HAZARD}.",
-    "To trade {ITEM} with {SUBJECT}, you should visit {DESTINATION}.",
+    "To trade a {ITEM} with {SUBJECT}, you should visit {DESTINATION}.",
     "A session at {VILLAGE} will teach you about {TECH_TRIVIA}.",
-    "You will accidentally trade your {DEVICE} for {ADJECTIVE} {ITEM} at {DESTINATION}.",
+    "You will accidentally trade your {DEVICE} for a {ADJECTIVE} {ITEM} at {DESTINATION}.",
     "Beware of {SUBJECT} trying to {VERB} your {DEVICE} at {DESTINATION}.",
     "{TIME}, you will find {OBJECT} near {MAP_LOCATION}.",
-    "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {ADJECTIVE} {ITEM}.",
+    "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is a {ADJECTIVE} {ITEM}.",
     "A mysterious signal at {DESTINATION} suggests you should {ACTION}.",
     "If you see {HAZARD} at {DESTINATION}, quickly run to {MAP_LOCATION}."
 ]
@@ -237,6 +237,20 @@ def format_village(name, context_before):
     # Default: just put quotes around the village name (e.g. "Milliways", "Scottish Consulate")
     return f'"{name}"'
 
+def fix_a_an(text):
+    vowels = "aeiouAEIOU"
+    words = text.split(" ")
+    for i in range(len(words) - 1):
+        if words[i].lower() == "a":
+            next_word = words[i+1]
+            clean_next = next_word.lstrip('`"\'(')
+            if clean_next and clean_next[0] in vowels:
+                if words[i] == "A":
+                    words[i] = "An"
+                else:
+                    words[i] = "an"
+    return " ".join(words)
+
 def generate_fortune(seed_val):
     rng = SeededRandom(seed_val)
     template = rng.choice(TEMPLATES)
@@ -258,4 +272,5 @@ def generate_fortune(seed_val):
             
     if result:
         result = result[0].upper() + result[1:]
+        result = fix_a_an(result)
     return result
