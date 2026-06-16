@@ -190,7 +190,7 @@ TEMPLATES = [
     "{SUBJECT} at {DESTINATION} will offer you {ITEM} in exchange for debugging assistance.",
     "You will accidentally drop your {DEVICE} into {OBJECT} at {DESTINATION}.",
     "Your {DEVICE} will start picking up strange signals from {VILLAGE}.",
-    "You will spend {TIME} attempting to explain {TECH_TRIVIA} to {SUBJECT}.",
+    "{TIME}, you will spend time attempting to explain {TECH_TRIVIA} to {SUBJECT}.",
     "A mysterious flashing LED at {DESTINATION} is actually a secret message about {TECH_TRIVIA}.",
     "If you visit {DESTINATION} {TIME}, you will be asked to help {SUBJECT} {ACTION}.",
     "{SUBJECT} at {DESTINATION} will help you {ACTION}.",
@@ -199,11 +199,42 @@ TEMPLATES = [
     "A session at {VILLAGE} will teach you about {TECH_TRIVIA}.",
     "You will accidentally trade your {DEVICE} for {ADJECTIVE} {ITEM} at {DESTINATION}.",
     "Beware of {SUBJECT} trying to {VERB} your {DEVICE} at {DESTINATION}.",
-    "During {TIME}, you will find {OBJECT} near {MAP_LOCATION}.",
+    "{TIME}, you will find {OBJECT} near {MAP_LOCATION}.",
     "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {ADJECTIVE} {ITEM}.",
     "A mysterious signal at {DESTINATION} suggests you should {ACTION}.",
     "If you see {HAZARD} at {DESTINATION}, quickly run to {MAP_LOCATION}."
 ]
+
+def format_village(name, context_before):
+    # Determine self-descriptive place
+    self_descriptive_words = [
+        "hackspace", "hacklab", "makespace", "makerspace", "make space", "maker space",
+        "consulate", "embassy", "village", "sector", "camp", "lounge", "area", "house", "room"
+    ]
+    name_lower = name.lower()
+    is_self_descriptive = any(word in name_lower for word in self_descriptive_words)
+    
+    if is_self_descriptive:
+        return f'"{name}"'
+        
+    # Check suffix words for collective/club nouns
+    collective_nouns = [
+        "club", "armada", "commission", "lounge", "hq", "lab", "society", "project", 
+        "team", "group", "network", "force", "consortium", "union", "association", 
+        "friends", "bods", "racers", "pals", "gamers", "makers", "biohackers"
+    ]
+    ends_with_collective = any(name_lower.endswith(noun) for noun in collective_nouns)
+    
+    # Check preceding context to decide pre- or post- quantifier
+    context_before = context_before.lower()
+    
+    if "visit" in context_before:
+        return f'the village "{name}"'
+        
+    if ends_with_collective:
+        return f'"{name}" village'
+    else:
+        return f'the village "{name}"'
 
 def generate_fortune(seed_val):
     rng = SeededRandom(seed_val)
@@ -215,6 +246,12 @@ def generate_fortune(seed_val):
         placeholder = "{" + key + "}"
         while placeholder in result:
             choice = rng.choice(values)
+            # If it's a village (or destination that is in VILLAGES), format it!
+            if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                idx = result.find(placeholder)
+                context_before = result[max(0, idx - 20):idx]
+                choice = format_village(choice, context_before)
+                
             # Replace only the first occurrence to ensure fresh choice if placeholder appears multiple times
             result = result.replace(placeholder, choice, 1)
             
