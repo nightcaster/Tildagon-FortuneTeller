@@ -125,11 +125,11 @@ TERMS = {
         "some sketchy firmware", "a prototype hexpansion", "a bag of SMD parts", "a dual-beam oscilloscope"
     ],
     "ACTION": [
-        "volunteer at the bar", "take a risk", "ask for help", "take a break",
+        "serve drinks at the bar", "take a risk", "solve a difficult puzzle", "take a break",
         "start a side project", "sleep for 8 hours", "go on an adventure", "learn lockpicking",
-        "hack the campsite network", "solder some SMD components", "attend a talk on retro computing",
+        "explore the campsite network", "solder some SMD components", "attend a talk on retro computing",
         "stay up all night coding", "tinker with high-voltage gear", "exchange rare electronic parts",
-        "write firmware in MicroPython", "play retro arcade games", "configure a custom gateway"
+        "write firmware in MicroPython", "repair retro arcade games", "configure a custom gateway"
     ],
     "MAP_LOCATION": MAP_LOCATIONS,
     "VILLAGE": VILLAGES,
@@ -210,12 +210,8 @@ def format_village(name, context_before):
     
     # Proper noun exceptions that don't need prefix/suffix (just quotes)
     proper_noun_exceptions = {
-        "milliways", "freeside", "ztl", "bench", "com:laag", "d.i.b.s.", "loc", "pilk", 
-        "ignore all prior villages", "bodgeham-on-wye", "glastonledburyshire-on-severn", 
-        "sheffield-by-the-sea", "shrubbery", "sibermerdeka", "tented vias", "threadz 'n' webz", 
-        "tricky disco", "moose", "motley crew", "nadhack", "noobspace", "shonkbot", 
-        "shonkbot-sur-les-roues", "emf ctf", "emf-ix", "err_name_not_resolved", "field-fx", 
-        "gothic valley"
+        "milliways", "bodgeham-on-wye", "glastonledburyshire-on-severn", 
+        "sheffield-by-the-sea"
     }
     
     if name_lower in proper_noun_exceptions:
