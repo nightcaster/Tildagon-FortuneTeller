@@ -153,7 +153,7 @@ TERMS = {
     "DEVICE": [
         "Tildagon", "solder station", "oscilloscope", "BGP router", "3D printer",
         "Tesla coil", "amateur radio", "Wi-Fi antenna", "soldering iron", "portable console",
-        "logic analyzer", "SDR dongle", "microcontroller board"
+        "logic analyzer", "SDR dongle", "microcontroller"
     ],
     "TECH_TRIVIA": [
         "BGP peering", "solder joints", "firmware updates", "memory leaks", "GPIO pins",
