@@ -206,35 +206,36 @@ TEMPLATES = [
 ]
 
 def format_village(name, context_before):
-    # Determine self-descriptive place
-    self_descriptive_words = [
-        "hackspace", "hacklab", "makespace", "makerspace", "make space", "maker space",
-        "consulate", "embassy", "village", "sector", "camp", "lounge", "area", "house", "room"
-    ]
-    name_lower = name.lower()
-    is_self_descriptive = any(word in name_lower for word in self_descriptive_words)
+    name_lower = name.lower().strip()
     
-    if is_self_descriptive:
-        return f'"{name}"'
-        
-    # Check suffix words for collective/club nouns
-    collective_nouns = [
-        "club", "armada", "commission", "lounge", "hq", "lab", "society", "project", 
-        "team", "group", "network", "force", "consortium", "union", "association", 
-        "friends", "bods", "racers", "pals", "gamers", "makers", "biohackers"
-    ]
-    ends_with_collective = any(name_lower.endswith(noun) for noun in collective_nouns)
+    # Specific lists of exceptions based on grammatical style
+    prefix_villages = {
+        "all your bass are belong to us",
+        "brittany (the og one)",
+        "loitering within tent",
+        "poorly located progesterone",
+        "stroopwafels & oatcakes"
+    }
     
-    # Check preceding context to decide pre- or post- quantifier
-    context_before = context_before.lower()
+    suffix_villages = {
+        "hack club",
+        "dreamcat & friends",
+        "hacky racers",
+        "party pals",
+        "duck armada",
+        "clockwork bods",
+        "biohackers",
+        "koala makers"
+    }
     
-    if "visit" in context_before:
+    if name_lower in prefix_villages:
         return f'the village "{name}"'
         
-    if ends_with_collective:
+    if name_lower in suffix_villages:
         return f'"{name}" village'
-    else:
-        return f'the village "{name}"'
+        
+    # Default: just put quotes around the village name (e.g. "Milliways", "Scottish Consulate")
+    return f'"{name}"'
 
 def generate_fortune(seed_val):
     rng = SeededRandom(seed_val)
