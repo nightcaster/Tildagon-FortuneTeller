@@ -232,7 +232,7 @@ def format_village(name, context_before):
         return f'the village "{name}"'
         
     if name_lower in suffix_villages:
-        return f'"{name}" village'
+        return f'the "{name}" village'
         
     # Default: just put quotes around the village name (e.g. "Milliways", "Scottish Consulate")
     return f'"{name}"'
