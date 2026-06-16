@@ -125,7 +125,7 @@ TERMS = {
         "some sketchy firmware", "a prototype hexpansion", "a bag of SMD parts", "a dual-beam oscilloscope"
     ],
     "ACTION": [
-        "serve drinks at the bar", "take a risk", "solve a difficult puzzle", "take a break",
+        "volunteer at the bar", "take a risk", "solve a difficult puzzle", "take a break",
         "start a side project", "sleep for 8 hours", "go on an adventure", "learn lockpicking",
         "explore the campsite network", "solder some SMD components", "attend a talk on retro computing",
         "stay up all night coding", "tinker with high-voltage gear", "exchange rare electronic parts",
