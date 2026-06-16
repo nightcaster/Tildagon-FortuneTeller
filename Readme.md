@@ -22,3 +22,25 @@ A MicroPython application for the EMF 2024/2026 Tildagon Badge. This app emulate
 ## Development and Testing
 
 Use the sync script `scripts/sync-badge.ps1` to upload files to a physical Tildagon badge using `mpremote` (creates the case-sensitive `:apps/FortuneTeller` folder).
+
+## Fortune Reviewer & Simulator
+
+The project includes a Python-based local web simulator (`simulator.py`) designed for reviewing and validating the generated fortunes for any given seed.
+
+### Features
+* **Seed Controller:** Instantly inspect the outcomes of any base seed or generate a random seed.
+* **Daily Seed Calculator:** Simulate your badge's Unique ID and any date to reproduce the exact 36 fortunes that would be generated on the badge for that day.
+* **Dynamic Theme Highlighting:** Visualise which color theme is active (Theme 0 - 5) with a responsive user interface that automatically styles its panels to match active badge colors.
+* **Dual View Mode:**
+  * *Badge Paths (36 Fortunes)*: Shows the complete set of fortunes accessible by selecting any combination of the 6 color corners and 6 number flaps.
+  * *Sequential List (100)*: Review 100 sequential fortunes starting from the base seed.
+* **Filter Search:** Type keywords into the search bar to filter fortunes in real-time.
+* **Markdown Export:** Export the complete generated fortune review report directly to your clipboard or download it as a markdown file.
+
+### How to Run
+Start the simulator server locally:
+```powershell
+python simulator.py
+```
+This will start a lightweight web server (defaults to port `8080`) and automatically open a new tab in your default web browser to the dashboard URL (`http://localhost:8080/`).
+
