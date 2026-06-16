@@ -21,7 +21,8 @@ A MicroPython application for the EMF 2024/2026 Tildagon Badge. This app emulate
 
 ## Development and Testing
 
-Use the sync script `scripts/sync-badge.ps1` to upload files to a physical Tildagon badge using `mpremote` (creates the case-sensitive `:apps/FortuneTeller` folder).
+Upload the application files (`app.py`, `fortunes.py`, `tildagon.toml`, `__init__.py`) to the case-sensitive `:apps/FortuneTeller` folder on the Tildagon badge (for example, using `mpremote fs cp`).
+
 
 ## Fortune Reviewer & Simulator
 
