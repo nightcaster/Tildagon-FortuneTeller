@@ -6,6 +6,7 @@ import json
 import webbrowser
 import http.server
 import socket
+import importlib
 from datetime import datetime
 
 # Add root folder to sys.path to find fortunes
@@ -131,12 +132,374 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
         
         if path == "/api/fortunes":
             self.handle_api_fortunes(query)
+        elif path == "/api/config":
+            self.handle_api_config()
+        elif path == "/api/version":
+            self.handle_api_version()
         elif path == "/":
             self.handle_home()
         else:
             self.send_error(404, "File not found")
 
+    def do_POST(self):
+        parsed_url = urllib.parse.urlparse(self.path)
+        path = parsed_url.path
+        if path == "/api/save":
+            self.handle_api_save()
+        else:
+            self.send_error(404, "File not found")
+
+    def handle_api_config(self):
+        importlib.reload(fortunes)
+        config_data = {
+            "MAP_LOCATIONS": fortunes.MAP_LOCATIONS,
+            "VILLAGES": fortunes.VILLAGES,
+            "TERMS": fortunes.TERMS,
+            "UPBEAT_TEMPLATES": fortunes.UPBEAT_TEMPLATES,
+            "OMINOUS_TEMPLATES": fortunes.OMINOUS_TEMPLATES
+        }
+        response_bytes = json.dumps(config_data).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response_bytes)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(response_bytes)
+
+    def handle_api_version(self):
+        importlib.reload(fortunes)
+        try:
+            file_path = fortunes.__file__
+            if file_path.endswith(".pyc"):
+                file_path = file_path[:-1]
+            mtime = os.path.getmtime(file_path)
+        except Exception:
+            mtime = 0
+        response_bytes = json.dumps({"mtime": mtime}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response_bytes)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(response_bytes)
+
+    def handle_api_save(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        post_data = self.rfile.read(content_length)
+        try:
+            payload = json.loads(post_data.decode("utf-8"))
+            map_locations = payload.get("MAP_LOCATIONS")
+            villages = payload.get("VILLAGES")
+            terms = payload.get("TERMS")
+            upbeat_templates = payload.get("UPBEAT_TEMPLATES")
+            ominous_templates = payload.get("OMINOUS_TEMPLATES")
+            
+            if (map_locations is None or villages is None or terms is None or 
+                upbeat_templates is None or ominous_templates is None):
+                raise ValueError("Missing required configuration fields")
+                
+            file_path = fortunes.__file__
+            if file_path.endswith(".pyc"):
+                file_path = file_path[:-1]
+            elif file_path.endswith("__pycache__"):
+                file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fortunes.py")
+                
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write("# fortunes.py\n")
+                f.write("import math\n\n")
+                f.write("# Seeded pseudo-random number generator (LCG) for deterministic selection\n")
+                f.write("class SeededRandom:\n")
+                f.write("    def __init__(self, seed_val):\n")
+                f.write("        self.state = seed_val & 0xFFFFFFFF\n")
+                f.write("        if self.state == 0:\n")
+                f.write("            self.state = 123456789\n\n")
+                f.write("    def next_int(self):\n")
+                f.write("        self.state = (self.state * 1103515245 + 12345) & 0x7FFFFFFF\n")
+                f.write("        return self.state\n\n")
+                f.write("    def choice(self, lst):\n")
+                f.write("        if not lst:\n")
+                f.write("            return None\n")
+                f.write("        return lst[self.next_int() % len(lst)]\n\n")
+                
+                f.write(f"MAP_LOCATIONS = {json.dumps(map_locations, indent=4)}\n\n")
+                f.write(f"VILLAGES = {json.dumps(villages, indent=4)}\n\n")
+                
+                f.write("TERMS = {\n")
+                f.write("    \"MAP_LOCATION\": MAP_LOCATIONS,\n")
+                f.write("    \"VILLAGE\": VILLAGES,\n")
+                f.write("    \"DESTINATION\": MAP_LOCATIONS + VILLAGES,\n")
+                
+                for k, v in terms.items():
+                    if k in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                        continue
+                    f.write(f"    {json.dumps(k)}: [\n")
+                    for item in v:
+                        if isinstance(item, list):
+                            tuple_str = ", ".join(json.dumps(x) for x in item)
+                            f.write(f"        ({tuple_str}),\n")
+                        else:
+                            f.write(f"        {json.dumps(item)},\n")
+                    f.write("    ],\n")
+                f.write("}\n\n")
+                
+                f.write(f"UPBEAT_TEMPLATES = {json.dumps(upbeat_templates, indent=4)}\n\n")
+                f.write(f"OMINOUS_TEMPLATES = {json.dumps(ominous_templates, indent=4)}\n\n")
+                f.write("""COLLECTIVE_PREFIXES = [
+    "herd of",
+    "gaggle of",
+    "conference of",
+    "swarm of",
+    "parade of",
+    "tsunami of",
+    "mob of",
+    "cabal of",
+    "flock of"
+]
+
+def format_item(adjective, item, rng=None):
+    if isinstance(item, (list, tuple)):
+        name = item[0]
+        itype = item[1]
+        unit = item[2] if len(item) > 2 else None
+    else:
+        name = item
+        itype = "countable"
+        unit = None
+
+    if itype == "plural" and not unit and rng:
+        unit = rng.choice(COLLECTIVE_PREFIXES)
+
+    if unit:
+        if adjective:
+            phrase = f"{unit} {adjective} {name}"
+        else:
+            phrase = f"{unit} {name}"
+        return fix_a_an(f"a {phrase}")
+    else:
+        if adjective:
+            phrase = f"{adjective} {name}"
+        else:
+            phrase = name
+        if itype == "countable":
+            return fix_a_an(f"a {phrase}")
+        return phrase
+
+def generate_fortune(seed_val):
+    rng = SeededRandom(seed_val)
+    
+    vibe_roll = rng.next_int() % 100
+    if vibe_roll < 85:
+        template = rng.choice(UPBEAT_TEMPLATES)
+    else:
+        template = rng.choice(OMINOUS_TEMPLATES)
+        
+    result = template
+
+    # Resolve compound placeholders first
+    while "{TECH_ADJECTIVE_ITEM}" in result:
+        adj = rng.choice(TERMS["TECH_ADJECTIVE"])
+        item = rng.choice(TERMS["TECH_ITEM"])
+        val = format_item(adj, item, rng)
+        result = result.replace("{TECH_ADJECTIVE_ITEM}", val, 1)
+
+    while "{CRAFT_ADJECTIVE_ITEM}" in result:
+        adj = rng.choice(TERMS["CRAFT_ADJECTIVE"])
+        item = rng.choice(TERMS["CRAFT_ITEM"])
+        val = format_item(adj, item, rng)
+        result = result.replace("{CRAFT_ADJECTIVE_ITEM}", val, 1)
+
+    while "{TECH_SHINY_ITEM}" in result:
+        item = rng.choice(TERMS["TECH_ITEM"])
+        val = format_item("shiny", item, rng)
+        result = result.replace("{TECH_SHINY_ITEM}", val, 1)
+
+    while "{TECH_RARE_ITEM}" in result:
+        item = rng.choice(TERMS["TECH_ITEM"])
+        val = format_item("rare", item, rng)
+        result = result.replace("{TECH_RARE_ITEM}", val, 1)
+
+    # Standard placeholders replacement
+    for key, values in TERMS.items():
+        placeholder = "{" + key + "}"
+        while placeholder in result:
+            choice = rng.choice(values)
+            if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                idx = result.find(placeholder)
+                context_before = result[max(0, idx - 20):idx]
+                choice = format_village(choice, context_before)
+            elif isinstance(choice, (list, tuple)):
+                choice = format_item("", choice, rng)
+                
+            result = result.replace(placeholder, choice, 1)
+            
+    if result:
+        result = result[0].upper() + result[1:]
+        result = fix_a_an(result)
+    return result
+
+def generate_fortune_metadata(seed_val):
+    rng = SeededRandom(seed_val)
+    
+    vibe_roll = rng.next_int() % 100
+    if vibe_roll < 85:
+        template = rng.choice(UPBEAT_TEMPLATES)
+        vibe = "upbeat"
+    else:
+        template = rng.choice(OMINOUS_TEMPLATES)
+        vibe = "ominous"
+        
+    tokens = [{"type": "text", "value": template}]
+
+    # Helper to resolve compound placeholders in tokens list
+    def replace_compound_placeholder(placeholder, key_name, adj_source, item_source, fixed_adj=None):
+        while True:
+            found_idx = -1
+            for idx, token in enumerate(tokens):
+                if token["type"] == "text" and placeholder in token["value"]:
+                    found_idx = idx
+                    break
+            if found_idx == -1:
+                break
+                
+            adj = fixed_adj if fixed_adj is not None else rng.choice(adj_source)
+            item = rng.choice(item_source)
+            
+            formatted_val = format_item(adj, item, rng)
+            raw_val = item[0] if isinstance(item, (list, tuple)) else item
+            
+            token_text = tokens[found_idx]["value"]
+            split_idx = token_text.find(placeholder)
+            left_text = token_text[:split_idx]
+            right_text = token_text[split_idx + len(placeholder):]
+            
+            new_tokens = []
+            if left_text:
+                new_tokens.append({"type": "text", "value": left_text})
+            new_tokens.append({
+                "type": "term",
+                "key": key_name,
+                "value": formatted_val,
+                "raw_value": raw_val,
+                "adj": adj
+            })
+            if right_text:
+                new_tokens.append({"type": "text", "value": right_text})
+                
+            tokens[found_idx:found_idx+1] = new_tokens
+
+    replace_compound_placeholder("{TECH_ADJECTIVE_ITEM}", "TECH_ITEM", TERMS["TECH_ADJECTIVE"], TERMS["TECH_ITEM"])
+    replace_compound_placeholder("{CRAFT_ADJECTIVE_ITEM}", "CRAFT_ITEM", TERMS["CRAFT_ADJECTIVE"], TERMS["CRAFT_ITEM"])
+    replace_compound_placeholder("{TECH_SHINY_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "shiny")
+    replace_compound_placeholder("{TECH_RARE_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "rare")
+
+    for key, values in TERMS.items():
+        placeholder = "{" + key + "}"
+        while True:
+            found_idx = -1
+            for idx, token in enumerate(tokens):
+                if token["type"] == "text" and placeholder in token["value"]:
+                    found_idx = idx
+                    break
+            if found_idx == -1:
+                break
+                
+            choice = rng.choice(values)
+            raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+            
+            if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                full_text_before = ""
+                for i in range(found_idx):
+                    full_text_before += tokens[i]["value"]
+                token_text = tokens[found_idx]["value"]
+                split_idx = token_text.find(placeholder)
+                full_text_before += token_text[:split_idx]
+                
+                context_before = full_text_before[max(0, len(full_text_before) - 20):]
+                choice = format_village(choice, context_before)
+            elif isinstance(choice, (list, tuple)):
+                choice = format_item("", choice, rng)
+                
+            token_text = tokens[found_idx]["value"]
+            split_idx = token_text.find(placeholder)
+            left_text = token_text[:split_idx]
+            right_text = token_text[split_idx + len(placeholder):]
+            
+            new_tokens = []
+            if left_text:
+                new_tokens.append({"type": "text", "value": left_text})
+            new_tokens.append({
+                "type": "term",
+                "key": key,
+                "value": choice,
+                "raw_value": raw_choice,
+                "adj": ""
+            })
+            if right_text:
+                new_tokens.append({"type": "text", "value": right_text})
+                
+            tokens[found_idx:found_idx+1] = new_tokens
+
+    if tokens and tokens[0]["value"]:
+        val = tokens[0]["value"]
+        tokens[0]["value"] = val[0].upper() + val[1:]
+        
+    vowels = "aeiouAEIOU"
+    
+    def get_next_word(start_idx):
+        for j in range(start_idx, len(tokens)):
+            val = tokens[j]["value"]
+            words = val.split()
+            if words:
+                return words[0].lstrip("`\\\"'(")
+        return ""
+
+    for i in range(len(tokens)):
+        token = tokens[i]
+        if token["type"] == "text":
+            val = token["value"]
+            parts = val.split(" ")
+            changed = False
+            for p_idx in range(len(parts)):
+                word = parts[p_idx]
+                if word == "a" or (word == "A" and i == 0 and p_idx == 0):
+                    next_w = ""
+                    if p_idx + 1 < len(parts):
+                        for k in range(p_idx + 1, len(parts)):
+                            if parts[k]:
+                                next_w = parts[k].lstrip("`\\\"'(")
+                                break
+                    if not next_w:
+                        next_w = get_next_word(i + 1)
+                        
+                    if next_w and next_w[0] in vowels:
+                        parts[p_idx] = "An" if word == "A" else "an"
+                        changed = True
+            if changed:
+                token["value"] = " ".join(parts)
+
+    return {
+        "template": template,
+        "vibe": vibe,
+        "tokens": tokens
+    }
+""")
+            
+            importlib.reload(fortunes)
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "success"}).encode("utf-8"))
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode("utf-8"))
+
     def handle_api_fortunes(self, query):
+        importlib.reload(fortunes)
         badge_id = query.get("badge_id", ["tildagon_badge_fortune"])[0]
         
         # Get date
@@ -186,14 +549,18 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
             for number in visible_numbers:
                 # Same formula as app.py
                 path_seed = base_seed + color_idx * 17 + number * 31
-                fortune_text = fortunes.generate_fortune(path_seed)
+                metadata = fortunes.generate_fortune_metadata(path_seed)
+                fortune_text = "".join(t["value"] for t in metadata["tokens"])
                 paths.append({
                     "color_idx": color_idx,
                     "color_name": color_name,
                     "color_rgb": color_rgb,
                     "number": number,
                     "path_seed": path_seed,
-                    "fortune": fortune_text
+                    "fortune": fortune_text,
+                    "tokens": metadata["tokens"],
+                    "template": metadata["template"],
+                    "vibe": metadata["vibe"]
                 })
                 
         # 3. Generate sequential random fortunes from seed
@@ -201,11 +568,15 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
         seq_rng = fortunes.SeededRandom(base_seed)
         for i in range(100):
             step_seed = seq_rng.next_int()
-            fortune_text = fortunes.generate_fortune(step_seed)
+            metadata = fortunes.generate_fortune_metadata(step_seed)
+            fortune_text = "".join(t["value"] for t in metadata["tokens"])
             sequential.append({
                 "index": i + 1,
                 "seed": step_seed,
-                "fortune": fortune_text
+                "fortune": fortune_text,
+                "tokens": metadata["tokens"],
+                "template": metadata["template"],
+                "vibe": metadata["vibe"]
             })
             
         response_data = {
@@ -248,7 +619,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔮 Tildagon Fortune Teller Reviewer</title>
+    <title>🔮 Tildagon Fortune Teller Reviewer & Editor</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -512,7 +883,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             gap: 0.75rem;
             align-items: center;
             flex-grow: 1;
-            max-width: 600px;
+            max-width: 400px;
             justify-content: flex-end;
         }
 
@@ -631,6 +1002,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             display: flex;
             flex-direction: column;
             gap: 4px;
+            flex-grow: 1;
         }
 
         .fortune-text {
@@ -798,7 +1170,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             background: rgba(0, 240, 255, 0.25);
             color: #fff;
             border-radius: 2px;
-            padding: 0 2px;
         }
 
         /* Custom Scrollbar for list container */
@@ -856,14 +1227,246 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Term tokens color coding styling */
+        .term-token {
+            display: inline-block;
+            padding: 0.05rem 0.3rem;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: all 0.15s ease;
+            margin: 0 1px;
+        }
+        .term-token:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            border-color: rgba(255,255,255,0.25);
+        }
+
+        .term-key-MAP_LOCATION { background: rgba(255, 99, 132, 0.15); color: rgb(255, 120, 150); }
+        .term-key-VILLAGE { background: rgba(255, 206, 86, 0.15); color: rgb(255, 220, 100); }
+        .term-key-DESTINATION { background: rgba(255, 159, 64, 0.15); color: rgb(255, 180, 100); }
+        .term-key-PEOPLE_SUBJECT { background: rgba(75, 192, 192, 0.15); color: rgb(100, 220, 220); }
+        .term-key-CREATURE_SUBJECT { background: rgba(54, 162, 235, 0.15); color: rgb(100, 190, 255); }
+        .term-key-CREATURE_PLURAL { background: rgba(54, 162, 235, 0.15); color: rgb(100, 190, 255); }
+        .term-key-TECH_VERB { background: rgba(153, 102, 255, 0.15); color: rgb(180, 140, 255); }
+        .term-key-SOCIAL_VERB { background: rgba(201, 203, 207, 0.15); color: rgb(220, 220, 220); }
+        .term-key-ACTIVE_DEVICE { background: rgba(233, 30, 99, 0.15); color: rgb(255, 100, 150); }
+        .term-key-BENCH_TOOL { background: rgba(156, 39, 176, 0.15); color: rgb(220, 100, 255); }
+        .term-key-TECH_TARGET { background: rgba(0, 150, 136, 0.15); color: rgb(50, 220, 200); }
+        .term-key-SOCIAL_OBJECT { background: rgba(33, 150, 243, 0.15); color: rgb(100, 180, 255); }
+        .term-key-ABSURD_OBJECT { background: rgba(255, 235, 59, 0.15); color: rgb(255, 240, 100); }
+        .term-key-CAMP_ACTION { background: rgba(76, 175, 80, 0.15); color: rgb(120, 230, 120); }
+        .term-key-HACKER_ACTION { background: rgba(139, 195, 74, 0.15); color: rgb(180, 240, 120); }
+        .term-key-HAZARD { background: rgba(244, 67, 54, 0.15); color: rgb(255, 120, 120); }
+        .term-key-ADJECTIVE { background: rgba(255, 193, 7, 0.15); color: rgb(255, 210, 80); }
+        .term-key-ITEM { background: rgba(255, 87, 34, 0.15); color: rgb(255, 130, 90); }
+        .term-key-TECH_TRIVIA { background: rgba(103, 58, 183, 0.15); color: rgb(160, 120, 255); }
+        .term-key-TIME { background: rgba(96, 125, 139, 0.15); color: rgb(160, 180, 190); }
+        .term-key-LUCKY_NUMBER { background: rgba(0, 188, 212, 0.15); color: rgb(100, 230, 255); }
+
+        /* Modal/Popover CSS */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(10, 6, 26, 0.8);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 1;
+            transition: opacity 0.2s ease;
+        }
+        .modal-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .modal-content {
+            width: 90%;
+            max-width: 550px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 1.5rem;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .modal-body {
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .modal-options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-top: 0.5rem;
+        }
+        .modal-option-item {
+            font-size: 0.9rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: normal;
+            word-break: break-word;
+            line-height: 1.4;
+        }
+        .modal-option-item:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.15);
+        }
+        .modal-option-item.active {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 240, 255, 0.1);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        /* Dictionary & Templates Editor CSS */
+        .dictionary-view {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+        .dict-category-card {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.02);
+            padding: 1.25rem;
+        }
+        .dict-category-title {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            margin-bottom: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .dict-terms-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+            max-height: 550px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+            margin-top: 1rem;
+        }
+        .dict-term-editable {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+        }
+        .dict-term-input {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            flex-grow: 1;
+            width: 100%;
+        }
+        .dict-term-input:focus {
+            outline: none;
+            border-bottom: 1px solid var(--accent-cyan);
+        }
+        .dict-term-del {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0 0.25rem;
+        }
+        .dict-term-del:hover {
+            color: rgb(255, 100, 100);
+        }
+
+        .template-item-row {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(0,0,0,0.3);
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+            align-items: center;
+        }
+        .template-textarea {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-family: var(--font-sans);
+            font-size: 0.9rem;
+            width: 100%;
+            resize: vertical;
+            min-height: 40px;
+        }
+        .template-textarea:focus {
+            outline: none;
+            border-bottom: 1px solid var(--accent-cyan);
+        }
+        .adj-tab-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            padding: 0.35rem 0.75rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .adj-tab-btn.active {
+            background: var(--accent-cyan);
+            color: #000;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+        }
+        .adj-tab-btn-add {
+            border-style: dashed;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <!-- Header -->
         <header>
-            <h1>🔮 Tildagon Fortune Teller Reviewer</h1>
-            <p>Seeded Fortune Generator & Simulator. Easily review badge fortunes, custom seeds, daily combinations, and bulk outcomes.</p>
+            <h1>🔮 Tildagon Fortune Teller Reviewer & Editor</h1>
+            <p>Seeded Fortune Generator & Simulator. Color-coded terms, interactive dictionaries, real-time template editing, and instant updates.</p>
+            <p style="margin-top: 0.5rem; font-size: 1.15rem; font-family: var(--font-display);"><span id="stat-total-fortunes" style="color: var(--accent-cyan); font-weight: 700;">Calculating...</span> possible unique fortunes in total database pool</p>
         </header>
 
         <!-- Main Workspace -->
@@ -946,10 +1549,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <div class="tabs">
                         <button class="tab-btn active" data-tab="paths">Badge Paths (36 Fortunes)</button>
                         <button class="tab-btn" data-tab="sequential">Sequential List (100)</button>
+                        <button class="tab-btn" data-tab="dictionary">Manage Dictionary</button>
+                        <button class="tab-btn" data-tab="templates">Manage Templates</button>
                     </div>
 
                     <!-- Filters & Actions -->
-                    <div class="toolbar">
+                    <div class="toolbar" id="results-toolbar">
                         <div class="search-container">
                             <span class="search-icon">🔍</span>
                             <input type="text" class="search-input" id="search-input" placeholder="Search / filter fortunes...">
@@ -972,6 +1577,54 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- Tab 3: Dictionary Editor -->
+                <div id="tab-dictionary" class="tab-content hidden">
+                    <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <label style="font-weight: 600; text-transform: uppercase; font-size: 0.8rem; color: var(--text-secondary); letter-spacing: 1px;">Category:</label>
+                            <select id="dict-category-select" class="input-control" style="width: auto; display: inline-block; padding: 0.4rem 2rem 0.4rem 1rem; font-size: 0.9rem;">
+                                <!-- categories populated by JS -->
+                            </select>
+                        </div>
+                        <button class="btn btn-accent" id="btn-save-all-dict">💾 Save All Dictionary Changes</button>
+                    </div>
+                    <div class="dictionary-view" id="dictionary-view-container">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <!-- Tab 4: Template Editor -->
+                <div id="tab-templates" class="tab-content hidden">
+                    <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                        <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 600;">Template Manager</h2>
+                        <button class="btn btn-accent" id="btn-save-all-templates">💾 Save All Templates Changes</button>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start;">
+                        <!-- Upbeat Templates Column -->
+                        <div class="templates-col glass-card">
+                            <h3 style="color: var(--accent-cyan); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-size: 1.15rem;">
+                                <span>Upbeat Templates (85% probability)</span>
+                                <button class="btn btn-accent" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;" id="btn-add-upbeat-template">+ Add</button>
+                            </h3>
+                            <div id="upbeat-templates-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 500px; overflow-y: auto; padding-right: 0.25rem;">
+                                <!-- Filled by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Ominous Templates Column -->
+                        <div class="templates-col glass-card">
+                            <h3 style="color: var(--accent-purple); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-size: 1.15rem;">
+                                <span>Ominous Templates (15% probability)</span>
+                                <button class="btn btn-accent" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;" id="btn-add-ominous-template">+ Add</button>
+                            </h3>
+                            <div id="ominous-templates-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 500px; overflow-y: auto; padding-right: 0.25rem;">
+                                <!-- Filled by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
         </div>
@@ -979,14 +1632,118 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <!-- Footer Info -->
         <footer>
             <p>Tildagon Fortune Teller Simulator • Seeded deterministic choices. Formula matches client micro-python files.</p>
-            <p style="margin-top: 0.25rem; opacity: 0.7;">Total template formulas: 30 • Total possible distinct combinations: 8,122,802</p>
+            <p style="margin-top: 0.25rem; opacity: 0.7;">Click any term highlighted in the fortunes above to quickly edit it or view its category options.</p>
         </footer>
+    </div>
+
+    <!-- Interactive Term Modal -->
+    <div id="term-modal" class="modal-overlay hidden" onclick="closeTermModal()">
+        <div class="modal-content glass-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="term-modal-title" style="font-family: var(--font-display);">Edit Term</h3>
+                <button class="modal-close" onclick="closeTermModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label>Category (Type in Templates)</label>
+                    <select id="term-modal-category-select" class="input-control">
+                        <!-- Filled by JS -->
+                    </select>
+                </div>
+                
+                <div id="term-modal-adj-group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label>Adjective Variations (for compound term)</label>
+                    <div id="term-modal-adj-tabs" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;"></div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">Selected Tab Adjective:</span>
+                        <input type="text" id="term-modal-adj-input" class="input-control" style="flex-grow: 1; padding: 0.4rem 0.6rem;">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Selected Option</label>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <input type="text" id="term-modal-input" class="input-control" style="flex-grow: 1;">
+                        <button class="btn btn-accent" id="term-modal-btn-update">Update</button>
+                        <button class="btn" style="background: rgba(255, 70, 70, 0.15); border-color: rgba(255, 70, 70, 0.35); color: rgb(255, 100, 100);" id="term-modal-btn-delete">Remove</button>
+                    </div>
+                    <div id="term-modal-props-group" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">Type:</span>
+                        <select id="term-modal-type-select" class="input-control" style="width: 120px; padding: 0.4rem 0.6rem;">
+                            <option value="countable">Countable</option>
+                            <option value="plural">Plural</option>
+                            <option value="mass">Mass Noun</option>
+                        </select>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">Unit/Prefix:</span>
+                        <input type="text" id="term-modal-unit-input" class="input-control" placeholder="Unit (e.g. bottle of)" style="flex-grow: 1; padding: 0.4rem 0.6rem;">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Add New Alternative Option</label>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <input type="text" id="term-modal-add-input" class="input-control" placeholder="Type new term choice..." style="flex-grow: 1;">
+                        <button class="btn btn-accent" id="term-modal-btn-add">Add Choice</button>
+                    </div>
+                    <div id="term-modal-add-props-group" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center;">
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">Type:</span>
+                        <select id="term-modal-add-type-select" class="input-control" style="width: 120px; padding: 0.4rem 0.6rem;">
+                            <option value="countable">Countable</option>
+                            <option value="plural">Plural</option>
+                            <option value="mass">Mass Noun</option>
+                        </select>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">Unit/Prefix:</span>
+                        <input type="text" id="term-modal-add-unit-input" class="input-control" placeholder="Unit (e.g. bottle of)" style="flex-grow: 1; padding: 0.4rem 0.6rem;">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label id="term-modal-options-label">All Available Options in Category</label>
+                    <div id="term-modal-options-list" class="modal-options-list">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Previews Modal -->
+    <div id="template-previews-modal" class="modal-overlay hidden" onclick="closeTemplatePreviewsModal()">
+        <div class="modal-content glass-card" onclick="event.stopPropagation()" style="max-width: 650px;">
+            <div class="modal-header">
+                <h3 id="template-previews-modal-title" style="font-family: var(--font-display);">Template Previews</h3>
+                <button class="modal-close" onclick="closeTemplatePreviewsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="template-previews-modal-template" style="font-family: monospace; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 8px; margin-bottom: 1rem; border: 1px solid var(--panel-border); font-size: 0.95rem; overflow-x: auto; white-space: nowrap;"></p>
+                <p style="margin-bottom: 1rem; font-weight: 600; color: var(--accent-cyan);">100 Random Generated Sentences (Based on current seed):</p>
+                <div id="template-previews-modal-list" class="modal-options-list" style="max-height: 400px; display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto;">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Scripting -->
     <script>
         let currentData = null;
         let activeTab = 'paths';
+        let config = {
+            MAP_LOCATIONS: [],
+            VILLAGES: [],
+            TERMS: {},
+            UPBEAT_TEMPLATES: [],
+            OMINOUS_TEMPLATES: []
+        };
+        let activeModalKey = '';
+        let activeModalRawVal = '';
+        let activeModalAdj = '';
+        let activeModalSource = '';
+        let activeModalItemIdx = -1;
+        let activeModalTokenIdx = -1;
+        let activeModalTemplate = '';
+        let activeModalVibe = '';
+        let activeModalTokens = [];
 
         // Elements
         const elSeedInput = document.getElementById('input-seed');
@@ -1005,9 +1762,41 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         const elTabButtons = document.querySelectorAll('.tab-btn');
         const elSearchInput = document.getElementById('search-input');
         const elBtnExport = document.getElementById('btn-export');
+        const elResultsToolbar = document.getElementById('results-toolbar');
         
         const elColorsGrid = document.getElementById('colors-grid');
         const elSeqList = document.getElementById('seq-list');
+
+        // Modal Elements
+        const elTermModal = document.getElementById('term-modal');
+        const elTermModalCategorySelect = document.getElementById('term-modal-category-select');
+        const elTermModalAdjGroup = document.getElementById('term-modal-adj-group');
+        const elTermModalAdjTabs = document.getElementById('term-modal-adj-tabs');
+        const elTermModalAdjInput = document.getElementById('term-modal-adj-input');
+        const elTermModalInput = document.getElementById('term-modal-input');
+        const elTermModalAddInput = document.getElementById('term-modal-add-input');
+        const elTermModalOptionsList = document.getElementById('term-modal-options-list');
+        const elTermModalBtnUpdate = document.getElementById('term-modal-btn-update');
+        const elTermModalBtnDelete = document.getElementById('term-modal-btn-delete');
+        const elTermModalBtnAdd = document.getElementById('term-modal-btn-add');
+        const elTermModalPropsGroup = document.getElementById('term-modal-props-group');
+        const elTermModalTypeSelect = document.getElementById('term-modal-type-select');
+        const elTermModalUnitInput = document.getElementById('term-modal-unit-input');
+        const elTermModalAddPropsGroup = document.getElementById('term-modal-add-props-group');
+        const elTermModalAddTypeSelect = document.getElementById('term-modal-add-type-select');
+        const elTermModalAddUnitInput = document.getElementById('term-modal-add-unit-input');
+
+        // Dictionary Elements
+        const elDictCategorySelect = document.getElementById('dict-category-select');
+        const elDictViewContainer = document.getElementById('dictionary-view-container');
+        const elBtnSaveAllDict = document.getElementById('btn-save-all-dict');
+
+        // Template Elements
+        const elUpbeatTemplatesList = document.getElementById('upbeat-templates-list');
+        const elOminousTemplatesList = document.getElementById('ominous-templates-list');
+        const elBtnSaveAllTemplates = document.getElementById('btn-save-all-templates');
+        const elBtnAddUpbeatTemplate = document.getElementById('btn-add-upbeat-template');
+        const elBtnAddOminousTemplate = document.getElementById('btn-add-ominous-template');
 
         // Set default date to today
         const todayStr = new Date().toISOString().split('T')[0];
@@ -1015,8 +1804,43 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         // Init loads
         document.addEventListener('DOMContentLoaded', () => {
-            loadFromToday();
+            fetchConfig().then(() => {
+                loadFromToday();
+                startLiveReload();
+            });
         });
+
+        let lastMtime = null;
+        function startLiveReload() {
+            setInterval(() => {
+                fetch('/api/version')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (lastMtime === null) {
+                            lastMtime = data.mtime;
+                        } else if (data.mtime > lastMtime) {
+                            lastMtime = data.mtime;
+                            console.log("fortunes.py changed on disk! Live refreshing...");
+                            fetchConfig().then(() => {
+                                if (activeTab === 'dictionary') {
+                                    renderDictionaryTab();
+                                } else if (activeTab === 'templates') {
+                                    renderTemplatesTab();
+                                }
+                                const params = { seed: elSeedInput.value };
+                                if (!elSwitchAutoTheme.checked) {
+                                    const activeThemeBtn = document.querySelector('.theme-select-btn.active');
+                                    if (activeThemeBtn) {
+                                        params.theme_idx = activeThemeBtn.getAttribute('data-theme');
+                                    }
+                                }
+                                fetchFortunes(params);
+                            });
+                        }
+                    })
+                    .catch(err => console.error("Live reload check failed:", err));
+            }, 1000);
+        }
 
         // Event Listeners
         elBtnRandom.addEventListener('click', () => {
@@ -1025,8 +1849,68 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             fetchFortunes({ seed: randSeed });
         });
 
+        elTermModalCategorySelect.addEventListener('change', () => {
+            renderModalOptionsList();
+        });
+
+        elTermModalAdjInput.addEventListener('input', () => {
+            // Also update the active tab button's text/data if we are currently editing an adjective
+            const activeTabBtn = elTermModalAdjTabs.querySelector('.adj-tab-btn.active');
+            if (activeTabBtn && !activeTabBtn.classList.contains('adj-tab-btn-add')) {
+                const oldAdj = activeTabBtn.getAttribute('data-adj');
+                const newAdj = elTermModalAdjInput.value.trim();
+                
+                const adjKey = (activeModalKey === 'TECH_ITEM') ? 'TECH_ADJECTIVE' : 'CRAFT_ADJECTIVE';
+                const adjList = config.TERMS[adjKey];
+                if (adjList) {
+                    const adjIdx = adjList.indexOf(oldAdj);
+                    if (adjIdx !== -1) {
+                        adjList[adjIdx] = newAdj;
+                    }
+                }
+                
+                activeTabBtn.setAttribute('data-adj', newAdj);
+                activeTabBtn.innerText = newAdj || '(blank)';
+                // Update the adj variable in memory so preview lists render correctly
+                activeModalAdj = newAdj;
+                
+                updateTotalFortunesCount();
+            }
+            renderModalOptionsList();
+        });
+
+        elTermModalInput.addEventListener('input', () => {
+            activeModalRawVal = elTermModalInput.value;
+            renderModalOptionsList();
+        });
+
+        elTermModalTypeSelect.addEventListener('change', () => {
+            renderModalOptionsList();
+        });
+
+        elTermModalUnitInput.addEventListener('input', () => {
+            renderModalOptionsList();
+        });
+
         elBtnToday.addEventListener('click', () => {
             loadFromToday();
+        });
+
+        // Global click listener for color-coded term tokens
+        document.addEventListener('click', (e) => {
+            const token = e.target.closest('.term-token');
+            if (token) {
+                const key = token.getAttribute('data-key');
+                const rawVal = token.getAttribute('data-raw');
+                const source = token.getAttribute('data-source');
+                const itemIdx = parseInt(token.getAttribute('data-item-idx'));
+                const tokenIdx = parseInt(token.getAttribute('data-token-idx'));
+                const template = token.getAttribute('data-template');
+                const vibe = token.getAttribute('data-vibe');
+                const adj = token.getAttribute('data-adj') || '';
+                
+                openTermModal(e, key, rawVal, source, itemIdx, tokenIdx, template, vibe, adj);
+            }
         });
 
         elSeedInput.addEventListener('change', () => {
@@ -1051,13 +1935,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             if (elSwitchAutoTheme.checked) {
                 elManualThemeGroup.style.opacity = '0.5';
                 elManualThemeGroup.style.pointerEvents = 'none';
-                // Reload using the current seed without theme manual override
                 fetchFortunes({ seed: elSeedInput.value });
             } else {
                 elManualThemeGroup.style.opacity = '1';
                 elManualThemeGroup.style.pointerEvents = 'auto';
-                
-                // Set theme 0 active by default on manual switch, and reload
                 setThemeButtonActive(0);
                 fetchFortunes({
                     seed: elSeedInput.value,
@@ -1085,15 +1966,28 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 const tab = btn.getAttribute('data-tab');
                 activeTab = tab;
                 
+                // Hide all contents
+                document.getElementById('tab-paths').classList.add('hidden');
+                document.getElementById('tab-sequential').classList.add('hidden');
+                document.getElementById('tab-dictionary').classList.add('hidden');
+                document.getElementById('tab-templates').classList.add('hidden');
+                elResultsToolbar.classList.add('hidden');
+
                 if (tab === 'paths') {
                     document.getElementById('tab-paths').classList.remove('hidden');
-                    document.getElementById('tab-sequential').classList.add('hidden');
-                } else {
-                    document.getElementById('tab-paths').classList.add('hidden');
+                    elResultsToolbar.classList.remove('hidden');
+                    filterResults();
+                } else if (tab === 'sequential') {
                     document.getElementById('tab-sequential').classList.remove('hidden');
+                    elResultsToolbar.classList.remove('hidden');
+                    filterResults();
+                } else if (tab === 'dictionary') {
+                    document.getElementById('tab-dictionary').classList.remove('hidden');
+                    renderDictionaryTab();
+                } else if (tab === 'templates') {
+                    document.getElementById('tab-templates').classList.remove('hidden');
+                    renderTemplatesTab();
                 }
-                
-                filterResults();
             });
         });
 
@@ -1104,6 +1998,51 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         elBtnExport.addEventListener('click', () => {
             exportToMarkdown();
         });
+
+        // Config actions
+        function fetchConfig() {
+            return fetch('/api/config')
+                .then(res => res.json())
+                .then(data => {
+                    config = data;
+                    populateCategoryDropdown();
+                    updateTotalFortunesCount();
+                });
+        }
+
+        function saveConfig() {
+            elLoadingOverlay.classList.add('active');
+            return fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            })
+            .then(res => res.json())
+            .then(res => {
+                if (res.status === 'success') {
+                    // Reload config and re-fetch fortunes
+                    return fetchConfig().then(() => {
+                        const params = { seed: elSeedInput.value };
+                        if (!elSwitchAutoTheme.checked) {
+                            const activeThemeBtn = document.querySelector('.theme-select-btn.active');
+                            if (activeThemeBtn) {
+                                params.theme_idx = activeThemeBtn.getAttribute('data-theme');
+                            }
+                        }
+                        return fetchFortunes(params);
+                    });
+                } else {
+                    alert('Error saving configuration: ' + res.message);
+                }
+            })
+            .catch(err => {
+                alert('Connection error saving configuration.');
+                console.error(err);
+            })
+            .finally(() => {
+                elLoadingOverlay.classList.remove('active');
+            });
+        }
 
         // Functions
         function loadFromToday() {
@@ -1195,12 +2134,34 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             });
         }
 
+        // Color coding tokens formatter
+        function formatTokens(tokens, source, itemIdx, template, vibe) {
+            return tokens.map((t, tokenIdx) => {
+                if (t.type === 'text') {
+                    return escapeHtml(t.value);
+                } else {
+                    const adjAttr = t.adj ? ` data-adj="${escapeHtml(t.adj)}"` : '';
+                    return `<span class="term-token term-key-${t.key}" data-key="${t.key}" data-raw="${escapeHtml(t.raw_value)}"${adjAttr} data-source="${source}" data-item-idx="${itemIdx}" data-token-idx="${tokenIdx}" data-template="${escapeHtml(template)}" data-vibe="${vibe}">${escapeHtml(t.value)}</span>`;
+                }
+            }).join('');
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
         function renderBadgePaths(paths) {
             elColorsGrid.innerHTML = '';
             
             // Group by color index
             const groups = {};
-            paths.forEach(p => {
+            paths.forEach((p, globalIdx) => {
+                p._globalIdx = globalIdx;
                 if (!groups[p.color_idx]) {
                     groups[p.color_idx] = [];
                 }
@@ -1234,7 +2195,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 const list = document.createElement('div');
                 list.className = 'fortunes-list';
 
-                colorPaths.forEach(p => {
+                colorPaths.forEach((p) => {
                     const item = document.createElement('div');
                     item.className = 'fortune-item';
                     item.style.setProperty('--btn-color', rgbStr);
@@ -1242,8 +2203,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     item.innerHTML = `
                         <div class="fortune-number">${p.number}</div>
                         <div class="fortune-text-box">
-                            <span class="fortune-text">${p.fortune}</span>
-                            <span class="fortune-meta">seed: ${p.path_seed}</span>
+                            <span class="fortune-text">${formatTokens(p.tokens, 'paths', p._globalIdx, p.template, p.vibe)}</span>
+                            <span class="fortune-meta">seed: ${p.path_seed} &bull; template: <span class="edit-template-link" onclick="navigateToTemplate(event, '${escapeHtml(p.template)}', '${p.vibe}')" style="font-family: monospace; color: var(--accent-cyan); text-decoration: underline; cursor: pointer; opacity: 0.85;">${escapeHtml(p.template)}</span></span>
                         </div>
                     `;
                     list.appendChild(item);
@@ -1256,19 +2217,134 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         function renderSequential(sequential) {
             elSeqList.innerHTML = '';
-            sequential.forEach(s => {
+            sequential.forEach((s, sIdx) => {
                 const item = document.createElement('div');
                 item.className = 'seq-item';
                 item.innerHTML = `
                     <div class="seq-badge">#${s.index}</div>
                     <div class="seq-content">
-                        <div class="fortune-text">${s.fortune}</div>
-                        <div class="seq-seed">Seed: ${s.seed}</div>
+                        <div class="fortune-text">${formatTokens(s.tokens, 'sequential', sIdx, s.template, s.vibe)}</div>
+                        <div class="seq-seed">Seed: ${s.seed} &bull; template: <span class="edit-template-link" onclick="navigateToTemplate(event, '${escapeHtml(s.template)}', '${s.vibe}')" style="font-family: monospace; color: var(--accent-cyan); text-decoration: underline; cursor: pointer; opacity: 0.85;">${escapeHtml(s.template)}</span></div>
                     </div>
                 `;
                 elSeqList.appendChild(item);
             });
         }
+
+        window.navigateToTemplate = function(e, templateText, vibe) {
+            if (e) e.preventDefault();
+            
+            // Switch tab to 'templates'
+            const tabBtn = document.querySelector('.tab-btn[data-tab="templates"]');
+            if (tabBtn) tabBtn.click();
+            
+            // Find template and its index
+            const tplList = (vibe === 'upbeat') ? config.UPBEAT_TEMPLATES : config.OMINOUS_TEMPLATES;
+            const idx = tplList.indexOf(templateText);
+            if (idx === -1) return;
+            
+            // Wait for DOM to render list items
+            setTimeout(() => {
+                const targetId = `template-item-${vibe}-${idx}`;
+                const targetEl = document.getElementById(targetId);
+                if (targetEl) {
+                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    const textarea = targetEl.querySelector('.template-textarea');
+                    if (textarea) {
+                        textarea.focus();
+                        textarea.style.boxShadow = '0 0 15px var(--accent-cyan)';
+                        textarea.style.borderColor = 'var(--accent-cyan)';
+                        setTimeout(() => {
+                            textarea.style.boxShadow = '';
+                            textarea.style.borderColor = '';
+                        }, 2000);
+                    }
+                }
+            }, 150);
+        };
+
+        class SeededRandomJS {
+            constructor(seedVal) {
+                this.state = seedVal & 0xFFFFFFFF;
+                if (this.state === 0) {
+                    this.state = 123456789;
+                }
+            }
+            nextInt() {
+                this.state = (this.state * 1103515245 + 12345) & 0x7FFFFFFF;
+                return this.state;
+            }
+            choice(lst) {
+                if (!lst || lst.length === 0) return null;
+                return lst[this.nextInt() % lst.length];
+            }
+        }
+
+        function generateFortuneJS(template, stepSeed) {
+            let rng = new SeededRandomJS(stepSeed);
+            let result = template;
+            const keys = ['MAP_LOCATION', 'VILLAGE', 'DESTINATION', ...Object.keys(config.TERMS).filter(k => k !== 'MAP_LOCATION' && k !== 'VILLAGE' && k !== 'DESTINATION')];
+            
+            keys.forEach(key => {
+                const placeholder = "{" + key + "}";
+                const values = getOptionsListForKey(key);
+                if (!values || values.length === 0) return;
+                
+                while (result.includes(placeholder)) {
+                    const choice = rng.choice(values);
+                    let displayVal = choice;
+                    if (key === 'VILLAGE' || (key === 'DESTINATION' && config.VILLAGES.includes(choice))) {
+                        displayVal = formatVillageJS(choice);
+                    }
+                    result = result.replace(placeholder, displayVal);
+                }
+            });
+            
+            if (result) {
+                result = result.charAt(0).toUpperCase() + result.slice(1);
+                result = fixAAnJS(result);
+            }
+            return result;
+        }
+
+        window.openTemplatePreviewsModal = function(template) {
+            const elModal = document.getElementById('template-previews-modal');
+            const elTpl = document.getElementById('template-previews-modal-template');
+            const elList = document.getElementById('template-previews-modal-list');
+            
+            elTpl.innerText = template;
+            elList.innerHTML = '';
+            
+            const baseSeed = parseInt(elSeedInput.value) || 0;
+            const seqRng = new SeededRandomJS(baseSeed);
+            
+            const uniqueFortunes = new Set();
+            let attempts = 0;
+            // Generate up to 100 unique variations, but cap attempts to 1000 to prevent infinite loops
+            while (uniqueFortunes.size < 100 && attempts < 1000) {
+                const stepSeed = seqRng.nextInt();
+                const fortune = generateFortuneJS(template, stepSeed);
+                uniqueFortunes.add(fortune);
+                attempts++;
+            }
+            
+            let i = 0;
+            uniqueFortunes.forEach(fortune => {
+                const item = document.createElement('div');
+                item.className = 'modal-option-item';
+                item.style.cursor = 'default';
+                item.innerText = `#${i + 1}: ${fortune}`;
+                elList.appendChild(item);
+                i++;
+            });
+            
+            elModal.classList.remove('hidden');
+        };
+
+        window.closeTemplatePreviewsModal = function() {
+            document.getElementById('template-previews-modal').classList.add('hidden');
+        };
 
         function getCornerLabel(num) {
             const labels = {
@@ -1286,7 +2362,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             const query = elSearchInput.value.toLowerCase().trim();
             
             if (activeTab === 'paths') {
-                const items = elColorsGrid.querySelectorAll('.fortune-item');
                 const cards = elColorsGrid.querySelectorAll('.color-card');
                 
                 cards.forEach(card => {
@@ -1295,40 +2370,39 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     
                     cItems.forEach(item => {
                         const txtBox = item.querySelector('.fortune-text');
-                        const origText = txtBox.textContent;
+                        const origText = txtBox ? txtBox.textContent.toLowerCase() : '';
+                        const metaBox = item.querySelector('.fortune-meta');
+                        const metaText = metaBox ? metaBox.textContent.toLowerCase() : '';
                         
                         if (!query) {
                             item.classList.remove('hidden');
-                            txtBox.innerHTML = origText; // clear highlights
                             hasVisibleItem = true;
-                        } else if (origText.toLowerCase().includes(query)) {
+                        } else if (origText.includes(query) || metaText.includes(query)) {
                             item.classList.remove('hidden');
-                            txtBox.innerHTML = highlightText(origText, query);
                             hasVisibleItem = true;
                         } else {
                             item.classList.add('hidden');
                         }
                     });
 
-                    // Hide the parent card if it has no visible items
                     if (hasVisibleItem) {
                         card.classList.remove('hidden');
                     } else {
                         card.classList.add('hidden');
                     }
                 });
-            } else {
+            } else if (activeTab === 'sequential') {
                 const items = elSeqList.querySelectorAll('.seq-item');
                 items.forEach(item => {
                     const txtBox = item.querySelector('.fortune-text');
-                    const origText = txtBox.textContent;
+                    const origText = txtBox ? txtBox.textContent.toLowerCase() : '';
+                    const seedBox = item.querySelector('.seq-seed');
+                    const seedText = seedBox ? seedBox.textContent.toLowerCase() : '';
                     
                     if (!query) {
                         item.classList.remove('hidden');
-                        txtBox.innerHTML = origText;
-                    } else if (origText.toLowerCase().includes(query)) {
+                    } else if (origText.includes(query) || seedText.includes(query)) {
                         item.classList.remove('hidden');
-                        txtBox.innerHTML = highlightText(origText, query);
                     } else {
                         item.classList.add('hidden');
                     }
@@ -1336,26 +2410,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
         }
 
-        function highlightText(text, keyword) {
-            const regex = new RegExp(`(${escapeRegExp(keyword)})`, 'gi');
-            return text.replace(regex, '<span class="highlight">$1</span>');
-        }
-
-        function escapeRegExp(string) {
-            return string.replace(/[.*+?^${}()|[\]\\\\]/g, '\\\\$&');
-        }
-
         function exportToMarkdown() {
             if (!currentData) return;
 
-            let md = `# Tildagon Fortune Teller Review Report\\n\\n`;
-            md += `* **Generated on:** ${new Date().toLocaleString()}\\n`;
-            md += `* **Base Seed:** ${currentData.seed}\\n`;
-            md += `* **Theme Index:** ${currentData.theme_idx} (${currentData.theme_mode === 'auto' ? 'Calculated' : 'Manual Overridden'})\\n`;
-            md += `* **Date Context:** ${currentData.date}\\n`;
-            md += `* **Badge ID:** ${currentData.badge_id}\\n\\n`;
+            let md = `# Tildagon Fortune Teller Review Report\n\n`;
+            md += `* **Generated on:** ${new Date().toLocaleString()}\n`;
+            md += `* **Base Seed:** ${currentData.seed}\n`;
+            md += `* **Theme Index:** ${currentData.theme_idx} (${currentData.theme_mode === 'auto' ? 'Calculated' : 'Manual Overridden'})\n`;
+            md += `* **Date Context:** ${currentData.date}\n`;
+            md += `* **Badge ID:** ${currentData.badge_id}\n\n`;
             
-            md += `## 36 Path Fortunes (By Badge Colors/Buttons)\\n\\n`;
+            md += `## 36 Path Fortunes (By Badge Colors/Buttons)\n\n`;
             
             const groups = {};
             currentData.paths.forEach(p => {
@@ -1366,25 +2431,23 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             for (let i = 0; i < 6; i++) {
                 const colPaths = groups[i];
                 if (!colPaths) continue;
-                md += `### Corner ${i + 1} - ${colPaths[0].color_name} (${getCornerLabel(i + 1)})\\n\\n`;
+                md += `### Corner ${i + 1} - ${colPaths[0].color_name} (${getCornerLabel(i + 1)})\n\n`;
                 colPaths.forEach(p => {
-                    md += `* **Number ${p.number}:** ${p.fortune} *(path seed: ${p.path_seed})*\\n`;
+                    md += `* **Number ${p.number}:** ${p.fortune} *(path seed: ${p.path_seed})*\n`;
                 });
-                md += `\\n`;
+                md += `\n`;
             }
 
-            md += `## First 20 Sequential Outcomes\\n\\n`;
+            md += `## First 20 Sequential Outcomes\n\n`;
             for (let i = 0; i < 20; i++) {
                 const s = currentData.sequential[i];
-                md += `${s.index}. ${s.fortune} *(seed: ${s.seed})*\\n`;
+                md += `${s.index}. ${s.fortune} *(seed: ${s.seed})*\n`;
             }
 
-            // Copy to clipboard
             navigator.clipboard.writeText(md).then(() => {
                 alert("Copied Review Report in Markdown format to clipboard!");
             }).catch(err => {
                 console.error("Clipboard copy failed: ", err);
-                // Fallback to text file download
                 const blob = new Blob([md], {type: 'text/markdown'});
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -1394,6 +2457,755 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 a.click();
                 document.body.removeChild(a);
             });
+        }
+
+        function replaceNthPlaceholder(template, n, newPlaceholder) {
+            const regex = /\{([A-Z_]+)\}/g;
+            let count = 0;
+            return template.replace(regex, (match) => {
+                if (count === n) {
+                    count++;
+                    return `{${newPlaceholder}}`;
+                }
+                count++;
+                return match;
+            });
+        }
+
+        // Modal interactive actions
+        window.openTermModal = function(e, key, rawVal, source, itemIdx, tokenIdx, template, vibe, adj = '') {
+            e.stopPropagation();
+            activeModalKey = key;
+            activeModalRawVal = rawVal;
+            activeModalAdj = adj;
+            activeModalSource = source;
+            activeModalItemIdx = itemIdx;
+            activeModalTokenIdx = tokenIdx;
+            activeModalTemplate = template;
+            activeModalVibe = vibe;
+
+            if (source === 'paths') {
+                activeModalTokens = currentData.paths[itemIdx].tokens;
+            } else {
+                activeModalTokens = currentData.sequential[itemIdx].tokens;
+            }
+
+            // Populate category select options
+            elTermModalCategorySelect.innerHTML = '';
+            
+            const categories = [
+                { key: 'MAP_LOCATION', label: 'MAP_LOCATION' },
+                { key: 'VILLAGE', label: 'VILLAGE' },
+                { key: 'DESTINATION', label: 'DESTINATION' },
+                ...Object.keys(config.TERMS).filter(k => k !== 'DESTINATION' && k !== 'MAP_LOCATION' && k !== 'VILLAGE').map(k => ({ key: k, label: k }))
+            ];
+            
+            categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat.key;
+                opt.innerText = cat.label;
+                elTermModalCategorySelect.appendChild(opt);
+            });
+            
+            elTermModalCategorySelect.value = key;
+            elTermModalInput.value = rawVal;
+            elTermModalAddInput.value = '';
+
+            // Handle Adjective compound input visibility
+            if (adj) {
+                elTermModalAdjGroup.style.display = 'block';
+                
+                const adjKey = (key === 'TECH_ITEM') ? 'TECH_ADJECTIVE' : 'CRAFT_ADJECTIVE';
+                let adjList = config.TERMS[adjKey] ? [...config.TERMS[adjKey]] : [];
+                if (adjList.length === 0 && (adj === 'shiny' || adj === 'rare')) {
+                    adjList = [adj];
+                } else if (adj && !adjList.includes(adj)) {
+                    adjList.push(adj);
+                }
+                
+                const drawTabs = (selectedAdj) => {
+                    elTermModalAdjTabs.innerHTML = '';
+                    adjList.forEach((a, index) => {
+                        const tabBtn = document.createElement('button');
+                        tabBtn.className = 'adj-tab-btn' + (a === selectedAdj ? ' active' : '');
+                        tabBtn.innerText = a || '(blank)';
+                        tabBtn.setAttribute('data-adj', a);
+                        tabBtn.setAttribute('data-idx', index);
+                        tabBtn.addEventListener('click', (ev) => {
+                            ev.preventDefault();
+                            elTermModalAdjTabs.querySelectorAll('.adj-tab-btn').forEach(btn => btn.classList.remove('active'));
+                            tabBtn.classList.add('active');
+                            elTermModalAdjInput.value = a;
+                            activeModalAdj = a;
+                            renderModalOptionsList();
+                        });
+                        elTermModalAdjTabs.appendChild(tabBtn);
+                    });
+                    
+                    const addTabBtn = document.createElement('button');
+                    addTabBtn.className = 'adj-tab-btn adj-tab-btn-add';
+                    addTabBtn.innerText = '+ New';
+                    addTabBtn.addEventListener('click', (ev) => {
+                        ev.preventDefault();
+                        const newAdj = prompt("Enter new adjective variation:");
+                        if (newAdj && newAdj.trim()) {
+                            const trimmed = newAdj.trim();
+                            if (!adjList.includes(trimmed)) {
+                                adjList.push(trimmed);
+                                if (config.TERMS[adjKey] && !config.TERMS[adjKey].includes(trimmed)) {
+                                    config.TERMS[adjKey].push(trimmed);
+                                }
+                            }
+                            drawTabs(trimmed);
+                            elTermModalAdjInput.value = trimmed;
+                            activeModalAdj = trimmed;
+                            renderModalOptionsList();
+                            updateTotalFortunesCount();
+                        }
+                    });
+                    elTermModalAdjTabs.appendChild(addTabBtn);
+                };
+                
+                drawTabs(adj);
+                elTermModalAdjInput.value = adj;
+            } else {
+                elTermModalAdjGroup.style.display = 'none';
+                elTermModalAdjInput.value = '';
+                elTermModalAdjTabs.innerHTML = '';
+            }
+
+            // Handle type and unit props input visibility
+            const showProps = (key !== 'MAP_LOCATION' && key !== 'VILLAGE' && key !== 'DESTINATION');
+            if (showProps) {
+                elTermModalPropsGroup.style.display = 'flex';
+                elTermModalAddPropsGroup.style.display = 'flex';
+                
+                const targetList = getTargetStateList(key);
+                const foundItem = targetList.find(item => (Array.isArray(item) ? item[0] : item) === rawVal);
+                if (Array.isArray(foundItem)) {
+                    elTermModalTypeSelect.value = foundItem[1] || 'countable';
+                    elTermModalUnitInput.value = foundItem[2] || '';
+                } else {
+                    elTermModalTypeSelect.value = 'countable';
+                    elTermModalUnitInput.value = '';
+                }
+            } else {
+                elTermModalPropsGroup.style.display = 'none';
+                elTermModalAddPropsGroup.style.display = 'none';
+            }
+
+            renderModalOptionsList();
+            elTermModal.classList.remove('hidden');
+        };
+
+        window.closeTermModal = function() {
+            elTermModal.classList.add('hidden');
+        };
+
+        function getOptionsListForKey(key) {
+            if (key === 'MAP_LOCATION') return config.MAP_LOCATIONS;
+            if (key === 'VILLAGE') return config.VILLAGES;
+            if (key === 'DESTINATION') return [...config.MAP_LOCATIONS, ...config.VILLAGES];
+            return config.TERMS[key] || [];
+        }
+
+        const COLLECTIVE_PREFIXES_JS = [
+            "herd of",
+            "gaggle of",
+            "conference of",
+            "swarm of",
+            "parade of",
+            "tsunami of",
+            "mob of",
+            "cabal of",
+            "flock of"
+        ];
+
+        function formatItemJS(adjective, item) {
+            let name, itype, unit;
+            if (Array.isArray(item)) {
+                name = item[0];
+                itype = item[1];
+                unit = item.length > 2 ? item[2] : null;
+            } else {
+                name = item;
+                itype = "countable";
+                unit = null;
+            }
+
+            if (itype === "plural" && !unit) {
+                // For preview/JS rendering purposes, default to "gaggle of" if not specified
+                unit = "gaggle of";
+            }
+
+            if (unit) {
+                let phrase = adjective ? `${unit} ${adjective} ${name}` : `${unit} ${name}`;
+                return fixAAnJS(`a ${phrase}`);
+            } else {
+                let phrase = adjective ? `${adjective} ${name}` : `${name}`;
+                if (itype === "countable") {
+                    return fixAAnJS(`a ${phrase}`);
+                }
+                return phrase;
+            }
+        }
+
+        function fixAAnTokensJS(tokens) {
+            let vowels = "aeiouAEIOU";
+            function getNextWord(startIdx) {
+                for (let j = startIdx; j < tokens.length; j++) {
+                    let val = tokens[j].value;
+                    let words = val.trim().split(/\s+/);
+                    if (words.length > 0 && words[0]) {
+                        return words[0].replace(/^[`"'(]+/, "");
+                    }
+                }
+                return "";
+            }
+            for (let i = 0; i < tokens.length; i++) {
+                let token = tokens[i];
+                if (token.type === 'text') {
+                    let val = token.value;
+                    let parts = val.split(" ");
+                    let changed = false;
+                    for (let p_idx = 0; p_idx < parts.length; p_idx++) {
+                        let word = parts[p_idx];
+                        if (word === "a" || (word === "A" && i === 0 && p_idx === 0)) {
+                            let next_w = "";
+                            if (p_idx + 1 < parts.length) {
+                                  for (let k = p_idx + 1; k < parts.length; k++) {
+                                      if (parts[k]) {
+                                          next_w = parts[k].replace(/^[`"'(]+/, "");
+                                          break;
+                                      }
+                                  }
+                            }
+                            if (!next_w) {
+                                next_w = getNextWord(i + 1);
+                            }
+                            if (next_w && vowels.includes(next_w[0])) {
+                                parts[p_idx] = (word === "A") ? "An" : "an";
+                                changed = true;
+                            }
+                        }
+                    }
+                    if (changed) {
+                        token.value = parts.join(" ");
+                    }
+                }
+            }
+        }
+
+        function renderModalOptionsList() {
+            elTermModalOptionsList.innerHTML = '';
+            const selectedCategory = elTermModalCategorySelect.value;
+            const opts = getOptionsListForKey(selectedCategory);
+            
+            opts.forEach(opt => {
+                const optName = Array.isArray(opt) ? opt[0] : opt;
+                const elOpt = document.createElement('div');
+                elOpt.className = 'modal-option-item';
+                if (optName === activeModalRawVal && selectedCategory === activeModalKey) {
+                    elOpt.classList.add('active');
+                }
+                
+                // Construct the preview sentence tokens
+                const currentAdj = elTermModalAdjGroup.style.display !== 'none' ? elTermModalAdjInput.value : '';
+                const previewTokens = activeModalTokens.map((t, idx) => {
+                    if (idx === activeModalTokenIdx) {
+                        let displayVal = optName;
+                        if (selectedCategory === 'VILLAGE' || (selectedCategory === 'DESTINATION' && config.VILLAGES.includes(optName))) {
+                            displayVal = formatVillageJS(optName);
+                        } else if (selectedCategory !== 'MAP_LOCATION' && selectedCategory !== 'VILLAGE' && selectedCategory !== 'DESTINATION') {
+                            let itemToFormat = opt;
+                            if (optName === activeModalRawVal) {
+                                const nameVal = elTermModalInput.value.trim() || optName;
+                                const typeVal = elTermModalTypeSelect.value;
+                                const unitVal = elTermModalUnitInput.value.trim();
+                                itemToFormat = unitVal ? [nameVal, typeVal, unitVal] : [nameVal, typeVal];
+                            }
+                            displayVal = formatItemJS(currentAdj, itemToFormat);
+                        }
+                        return { type: 'term', value: displayVal };
+                    }
+                    return { type: t.type, value: t.value };
+                });
+                
+                // Capitalize first token
+                if (previewTokens.length > 0) {
+                    let firstVal = previewTokens[0].value;
+                    previewTokens[0].value = firstVal.charAt(0).toUpperCase() + firstVal.slice(1);
+                }
+                
+                // Fix a/an on tokens
+                fixAAnTokensJS(previewTokens);
+                
+                // Construct final HTML with term highlight
+                const previewHtml = previewTokens.map((t, idx) => {
+                    if (idx === activeModalTokenIdx) {
+                        return `<span class="term-token term-key-${selectedCategory}" style="font-weight: 600; border-bottom: 2px solid var(--accent-cyan); padding: 0 2px;">${escapeHtml(t.value)}</span>`;
+                    }
+                    return escapeHtml(t.value);
+                }).join('');
+                
+                elOpt.innerHTML = previewHtml;
+                
+                elOpt.addEventListener('click', () => {
+                    elTermModalInput.value = optName;
+                    activeModalRawVal = optName;
+                    elTermModalOptionsList.querySelectorAll('.modal-option-item').forEach(x => x.classList.remove('active'));
+                    elOpt.classList.add('active');
+                });
+                
+                elTermModalOptionsList.appendChild(elOpt);
+            });
+        }
+
+        elTermModalBtnUpdate.addEventListener('click', () => {
+            const newVal = elTermModalInput.value.trim();
+            if (!newVal) return;
+
+            const newCategory = elTermModalCategorySelect.value;
+            const showProps = (newCategory !== 'MAP_LOCATION' && newCategory !== 'VILLAGE' && newCategory !== 'DESTINATION');
+
+            // Handle adjective update for compound terms
+            if (activeModalAdj) {
+                const newAdj = elTermModalAdjInput.value.trim();
+                if (newAdj && newAdj !== activeModalAdj) {
+                    const adjKey = (activeModalKey === 'TECH_ITEM') ? 'TECH_ADJECTIVE' : 'CRAFT_ADJECTIVE';
+                    const adjList = config.TERMS[adjKey];
+                    if (adjList) {
+                        const adjIdx = adjList.indexOf(activeModalAdj);
+                        if (adjIdx !== -1) {
+                            adjList[adjIdx] = newAdj;
+                        }
+                    }
+                }
+            }
+
+            // Find template and update placeholder tag if category changed
+            if (newCategory !== activeModalKey) {
+                let termOccurrenceIdx = 0;
+                for (let i = 0; i < activeModalTokenIdx; i++) {
+                    if (activeModalTokens[i].type === 'term') {
+                        termOccurrenceIdx++;
+                    }
+                }
+                let tplList = (activeModalVibe === 'upbeat') ? config.UPBEAT_TEMPLATES : config.OMINOUS_TEMPLATES;
+                let tplIdx = tplList.indexOf(activeModalTemplate);
+                if (tplIdx !== -1) {
+                    tplList[tplIdx] = replaceNthPlaceholder(activeModalTemplate, termOccurrenceIdx, newCategory);
+                }
+                
+                // Add the custom value to the new category list if it's new
+                const newList = getTargetStateList(newCategory);
+                if (newList) {
+                    const exists = newList.some(item => (Array.isArray(item) ? item[0] : item) === newVal);
+                    if (!exists) {
+                        if (showProps) {
+                            const newType = elTermModalTypeSelect.value;
+                            const newUnit = elTermModalUnitInput.value.trim();
+                            if (newUnit) {
+                                newList.push([newVal, newType, newUnit]);
+                            } else {
+                                newList.push([newVal, newType]);
+                            }
+                        } else {
+                            newList.push(newVal);
+                        }
+                    }
+                }
+            } else {
+                // Same category, update the value in dictionary or add it
+                const targetList = getTargetStateList(activeModalKey);
+                if (targetList) {
+                    const idx = targetList.findIndex(item => (Array.isArray(item) ? item[0] : item) === activeModalRawVal);
+                    if (idx !== -1) {
+                        if (showProps) {
+                            const newType = elTermModalTypeSelect.value;
+                            const newUnit = elTermModalUnitInput.value.trim();
+                            if (newUnit) {
+                                targetList[idx] = [newVal, newType, newUnit];
+                            } else {
+                                targetList[idx] = [newVal, newType];
+                            }
+                        } else {
+                            targetList[idx] = newVal;
+                        }
+                    } else {
+                        const exists = targetList.some(item => (Array.isArray(item) ? item[0] : item) === newVal);
+                        if (!exists) {
+                            if (showProps) {
+                                const newType = elTermModalTypeSelect.value;
+                                const newUnit = elTermModalUnitInput.value.trim();
+                                if (newUnit) {
+                                    targetList.push([newVal, newType, newUnit]);
+                                } else {
+                                    targetList.push([newVal, newType]);
+                                }
+                            } else {
+                                targetList.push(newVal);
+                            }
+                        }
+                    }
+                }
+            }
+            saveConfig().then(() => closeTermModal());
+        });
+
+        elTermModalBtnDelete.addEventListener('click', () => {
+            const targetList = getTargetStateList(activeModalKey);
+            if (!targetList) return;
+
+            const idx = targetList.findIndex(item => (Array.isArray(item) ? item[0] : item) === activeModalRawVal);
+            if (idx !== -1) {
+                targetList.splice(idx, 1);
+                saveConfig().then(() => closeTermModal());
+            }
+        });
+
+        elTermModalBtnAdd.addEventListener('click', () => {
+            const addVal = elTermModalAddInput.value.trim();
+            if (!addVal) return;
+
+            const targetList = getTargetStateList(activeModalKey);
+            if (!targetList) return;
+
+            const exists = targetList.some(item => (Array.isArray(item) ? item[0] : item) === addVal);
+            if (!exists) {
+                const showProps = (activeModalKey !== 'MAP_LOCATION' && activeModalKey !== 'VILLAGE' && activeModalKey !== 'DESTINATION');
+                if (showProps) {
+                    const addType = elTermModalAddTypeSelect.value;
+                    const addUnit = elTermModalAddUnitInput.value.trim();
+                    if (addUnit) {
+                        targetList.push([addVal, addType, addUnit]);
+                    } else {
+                        targetList.push([addVal, addType]);
+                    }
+                } else {
+                    targetList.push(addVal);
+                }
+                saveConfig().then(() => {
+                    elTermModalAddInput.value = '';
+                    elTermModalAddUnitInput.value = '';
+                    renderModalOptionsList();
+                });
+            }
+        });
+
+        function getTargetStateList(key) {
+            if (key === 'MAP_LOCATION') return config.MAP_LOCATIONS;
+            if (key === 'VILLAGE') return config.VILLAGES;
+            if (key === 'DESTINATION') {
+                // If it is DESTINATION, we have to decide where it belongs:
+                // typically destination is MAP_LOCATIONS or VILLAGES. Let's find where it exists, or append to VILLAGES as default.
+                if (config.MAP_LOCATIONS.includes(activeModalRawVal)) return config.MAP_LOCATIONS;
+                return config.VILLAGES;
+            }
+            return config.TERMS[key];
+        }
+
+        // Dictionary tab functions
+        function populateCategoryDropdown() {
+            elDictCategorySelect.innerHTML = '';
+            
+            const categories = [
+                { key: 'MAP_LOCATIONS', label: 'MAP LOCATIONS (campsite areas)' },
+                { key: 'VILLAGES', label: 'VILLAGES (EMF villages list)' },
+                ...Object.keys(config.TERMS).map(k => ({ key: k, label: k }))
+            ];
+
+            categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat.key;
+                opt.innerText = cat.label;
+                elDictCategorySelect.appendChild(opt);
+            });
+
+            elDictCategorySelect.addEventListener('change', () => {
+                renderCategoryTerms(elDictCategorySelect.value);
+            });
+        }
+
+        function renderDictionaryTab() {
+            if (elDictCategorySelect.value) {
+                renderCategoryTerms(elDictCategorySelect.value);
+            } else if (elDictCategorySelect.firstElementChild) {
+                renderCategoryTerms(elDictCategorySelect.firstElementChild.value);
+            }
+        }
+
+        function getListFromConfigKey(key) {
+            if (key === 'MAP_LOCATIONS') return config.MAP_LOCATIONS;
+            if (key === 'VILLAGES') return config.VILLAGES;
+            return config.TERMS[key];
+        }
+
+        function renderCategoryTerms(key) {
+            elDictViewContainer.innerHTML = '';
+            const list = getListFromConfigKey(key);
+            if (!list) return;
+
+            const card = document.createElement('div');
+            card.className = 'dict-category-card';
+
+            const title = document.createElement('div');
+            title.className = 'dict-category-title';
+            title.innerHTML = `
+                <span>Category Options Count: ${list.length}</span>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="dict-bulk-add-input" class="input-control" placeholder="Add new item to list..." style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: 220px;">
+                    <button class="btn btn-accent" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" id="btn-dict-bulk-add">Add Choice</button>
+                </div>
+            `;
+            card.appendChild(title);
+
+            const grid = document.createElement('div');
+            grid.className = 'dict-terms-grid';
+
+            list.forEach((term, idx) => {
+                const isArr = Array.isArray(term);
+                const termName = isArr ? term[0] : term;
+                const row = document.createElement('div');
+                row.className = 'dict-term-editable';
+                
+                if (isArr) {
+                    const type = term[1] || 'countable';
+                    const unit = term[2] || '';
+                    row.innerHTML = `
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Term:</span>
+                        <input type="text" class="dict-term-input input-control" value="${escapeHtml(termName)}" style="flex-grow: 1;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Type:</span>
+                        <select class="dict-term-type input-control" style="width: 120px; padding: 0.25rem 0.5rem; font-size: 0.85rem;">
+                            <option value="countable" ${type === 'countable' ? 'selected' : ''}>Countable</option>
+                            <option value="plural" ${type === 'plural' ? 'selected' : ''}>Plural</option>
+                            <option value="mass" ${type === 'mass' ? 'selected' : ''}>Mass Noun</option>
+                        </select>
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Unit/Prefix:</span>
+                        <input type="text" class="dict-term-unit input-control" placeholder="E.g. bottle of" value="${escapeHtml(unit)}" style="width: 150px; padding: 0.25rem 0.5rem; font-size: 0.85rem;">
+                        <button class="dict-term-del btn" style="padding: 0.35rem 0.60rem; background: rgba(255, 70, 70, 0.15); border-color: rgba(255, 70, 70, 0.25); color: rgb(255, 100, 100); font-weight: bold; font-size: 0.95rem;">&times;</button>
+                    `;
+                    
+                    const input = row.querySelector('.dict-term-input');
+                    const select = row.querySelector('.dict-term-type');
+                    const unitInput = row.querySelector('.dict-term-unit');
+                    
+                    const updateProps = () => {
+                        const nName = input.value.trim();
+                        const nType = select.value;
+                        const nUnit = unitInput.value.trim();
+                        if (nUnit) {
+                            list[idx] = [nName, nType, nUnit];
+                        } else {
+                            list[idx] = [nName, nType];
+                        }
+                        updateTotalFortunesCount();
+                    };
+                    
+                    input.addEventListener('change', updateProps);
+                    select.addEventListener('change', updateProps);
+                    unitInput.addEventListener('change', updateProps);
+                } else {
+                    row.innerHTML = `
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Term:</span>
+                        <input type="text" class="dict-term-input input-control" value="${escapeHtml(termName)}" style="flex-grow: 1;">
+                        <button class="dict-term-del btn" style="padding: 0.35rem 0.60rem; background: rgba(255, 70, 70, 0.15); border-color: rgba(255, 70, 70, 0.25); color: rgb(255, 100, 100); font-weight: bold; font-size: 0.95rem;">&times;</button>
+                    `;
+                    
+                    const input = row.querySelector('.dict-term-input');
+                    input.addEventListener('change', () => {
+                        list[idx] = input.value.trim();
+                        updateTotalFortunesCount();
+                    });
+                }
+
+                // Handle deletes
+                row.querySelector('.dict-term-del').addEventListener('click', () => {
+                    list.splice(idx, 1);
+                    renderCategoryTerms(key); // redraw grid
+                    updateTotalFortunesCount();
+                });
+
+                grid.appendChild(row);
+            });
+
+            card.appendChild(grid);
+            elDictViewContainer.appendChild(card);
+
+            // Add listener
+            document.getElementById('btn-dict-bulk-add').addEventListener('click', () => {
+                const addInput = document.getElementById('dict-bulk-add-input');
+                const val = addInput.value.trim();
+                if (val) {
+                    const exists = list.some(item => (Array.isArray(item) ? item[0] : item) === val);
+                    if (!exists) {
+                        const isTupleCategory = [
+                            'PEOPLE_SUBJECT', 'CREATURE_SUBJECT', 'ACTIVE_DEVICE', 
+                            'BENCH_TOOL', 'SOCIAL_OBJECT', 'ABSURD_OBJECT', 
+                            'TECH_ITEM', 'CRAFT_ITEM'
+                        ].includes(key) || (list.length > 0 && Array.isArray(list[0]));
+                        
+                        if (isTupleCategory) {
+                            list.push([val, "countable"]);
+                        } else {
+                            list.push(val);
+                        }
+                        renderCategoryTerms(key);
+                        updateTotalFortunesCount();
+                    }
+                }
+            });
+        }
+
+        elBtnSaveAllDict.addEventListener('click', () => {
+            saveConfig().then(() => alert('Successfully saved dictionary changes back to fortunes.py!'));
+        });
+
+        // Templates tab functions
+        function renderTemplatesTab() {
+            renderTemplateList(config.UPBEAT_TEMPLATES, elUpbeatTemplatesList, 'upbeat');
+            renderTemplateList(config.OMINOUS_TEMPLATES, elOminousTemplatesList, 'ominous');
+        }
+
+        function renderTemplateList(templates, elTargetList, type) {
+            elTargetList.innerHTML = '';
+            templates.forEach((tpl, idx) => {
+                const row = document.createElement('div');
+                row.className = 'template-item-row';
+                row.id = `template-item-${type}-${idx}`;
+                row.style.display = 'flex';
+                row.style.flexDirection = 'column';
+                row.style.gap = '0.5rem';
+                row.style.alignItems = 'stretch';
+                row.innerHTML = `
+                    <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+                        <span style="font-family: var(--font-display); font-size: 0.8rem; opacity: 0.6; min-width: 20px; margin-top: 0.4rem;">#${idx+1}</span>
+                        <textarea class="template-textarea" data-index="${idx}" style="min-height: 70px; flex-grow: 1; padding: 0.5rem; font-size: 0.9rem; line-height: 1.4; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; background: rgba(0,0,0,0.2);">${escapeHtml(tpl)}</textarea>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem; padding-left: 28px;">
+                        <button class="btn btn-preview" style="padding: 0.25rem 0.6rem; font-size: 0.8rem; background: rgba(0, 240, 255, 0.1); border-color: rgba(0, 240, 255, 0.25); color: var(--accent-cyan);" data-index="${idx}">🔮 Preview 100</button>
+                        <button class="btn btn-delete" style="padding: 0.25rem 0.6rem; font-size: 0.8rem; background: rgba(255, 70, 70, 0.1); border-color: rgba(255, 70, 70, 0.25); color: rgb(255, 100, 100);" data-index="${idx}">Remove</button>
+                    </div>
+                `;
+
+                const txt = row.querySelector('.template-textarea');
+                txt.addEventListener('change', () => {
+                    templates[idx] = txt.value.trim();
+                    updateTotalFortunesCount();
+                });
+
+                row.querySelector('.btn-preview').addEventListener('click', () => {
+                    openTemplatePreviewsModal(templates[idx]);
+                });
+
+                row.querySelector('.btn-delete').addEventListener('click', () => {
+                    templates.splice(idx, 1);
+                    renderTemplateList(templates, elTargetList, type);
+                    updateTotalFortunesCount();
+                });
+
+                elTargetList.appendChild(row);
+            });
+        }
+
+        elBtnAddUpbeatTemplate.addEventListener('click', () => {
+            config.UPBEAT_TEMPLATES.push("A new template about {ITEM} or {VILLAGE}.");
+            renderTemplateList(config.UPBEAT_TEMPLATES, elUpbeatTemplatesList, 'upbeat');
+            updateTotalFortunesCount();
+        });
+
+        elBtnAddOminousTemplate.addEventListener('click', () => {
+            config.OMINOUS_TEMPLATES.push("Beware of {HAZARD} when compiling code for {ACTIVE_DEVICE}.");
+            renderTemplateList(config.OMINOUS_TEMPLATES, elOminousTemplatesList, 'ominous');
+            updateTotalFortunesCount();
+        });
+
+        elBtnSaveAllTemplates.addEventListener('click', () => {
+            saveConfig().then(() => alert('Successfully saved all templates changes back to fortunes.py!'));
+        });
+
+        // Helper functions for template permutations
+        function extractPlaceholders(template) {
+            const regex = /\{([A-Z_]+)\}/g;
+            let matches = [];
+            let match;
+            while ((match = regex.exec(template)) !== null) {
+                matches.push(match[1]);
+            }
+            return matches;
+        }
+
+        function getTemplatePermutationsCount(template, placeholders) {
+            if (placeholders.length === 0) return 1;
+            let count = 1;
+            placeholders.forEach(ph => {
+                let len = 0;
+                if (ph === 'MAP_LOCATION') len = config.MAP_LOCATIONS.length;
+                else if (ph === 'VILLAGE') len = config.VILLAGES.length;
+                else if (ph === 'DESTINATION') len = config.MAP_LOCATIONS.length + config.VILLAGES.length;
+                else if (ph === 'TECH_ADJECTIVE_ITEM') len = (config.TERMS['TECH_ADJECTIVE'] || []).length * (config.TERMS['TECH_ITEM'] || []).length;
+                else if (ph === 'CRAFT_ADJECTIVE_ITEM') len = (config.TERMS['CRAFT_ADJECTIVE'] || []).length * (config.TERMS['CRAFT_ITEM'] || []).length;
+                else if (ph === 'TECH_SHINY_ITEM') len = (config.TERMS['TECH_ITEM'] || []).length;
+                else if (ph === 'TECH_RARE_ITEM') len = (config.TERMS['TECH_ITEM'] || []).length;
+                else len = (config.TERMS[ph] || []).length;
+                count *= len;
+            });
+            return count;
+        }
+
+        function formatVillageJS(name) {
+            let name_lower = name.toLowerCase().trim();
+            let proper_noun_exceptions = ["milliways", "bodgeham-on-wye", "glastonledburyshire-on-severn", "sheffield-by-the-sea"];
+            if (proper_noun_exceptions.includes(name_lower)) {
+                return `"${name}"`;
+            }
+            let self_descriptive_words = [
+                "hackspace", "hacklab", "makespace", "makerspace", "make space", "maker space",
+                "consulate", "embassy", "village", "sector", "camp", "lounge", "area", "house", 
+                "room", "hq", "lab", "division", "station", "centre", "center", "ville"
+            ];
+            if (self_descriptive_words.some(word => name_lower.includes(word))) {
+                return `"${name}"`;
+            }
+            let collective_nouns = ["club", "armada", "commission", "society", "project", "team", "group", "network", "force", "consortium", "union", "association", "friends", "bods", "racers", "pals", "gamers", "makers", "biohackers"];
+            if (collective_nouns.some(noun => name_lower.endsWith(noun))) {
+                return `the "${name}" village`;
+            }
+            return `the village "${name}"`;
+        }
+
+        function fixAAnJS(text) {
+            let vowels = "aeiouAEIOU";
+            let words = text.split(" ");
+            for (let i = 0; i < words.length - 1; i++) {
+                if (words[i] === "a" || (i === 0 && words[i] === "A")) {
+                    let clean_next = words[i+1].replace(/^[`"'(]+/, "");
+                    if (clean_next && vowels.includes(clean_next[0])) {
+                        words[i] = (words[i] === "A") ? "An" : "an";
+                    }
+                }
+            }
+            return words.join(" ");
+        }
+
+        function updateTotalFortunesCount() {
+            let totalUpbeat = 0;
+            config.UPBEAT_TEMPLATES.forEach(tpl => {
+                const placeholders = extractPlaceholders(tpl);
+                totalUpbeat += getTemplatePermutationsCount(tpl, placeholders);
+            });
+
+            let totalOminous = 0;
+            config.OMINOUS_TEMPLATES.forEach(tpl => {
+                const placeholders = extractPlaceholders(tpl);
+                totalOminous += getTemplatePermutationsCount(tpl, placeholders);
+            });
+
+            const totalPool = totalUpbeat + totalOminous;
+            const elStat = document.getElementById('stat-total-fortunes');
+            if (elStat) {
+                elStat.innerText = totalPool.toLocaleString();
+            }
         }
     </script>
 </body>
@@ -1417,7 +3229,10 @@ def main():
 
     url = f"http://{host}:{port}/"
     print("=" * 60)
-    print(f"🔮 Fortune Teller Simulator is running on: {url}")
+    try:
+        print(f"🔮 Fortune Teller Simulator is running on: {url}")
+    except UnicodeEncodeError:
+        print(f"[*] Fortune Teller Simulator is running on: {url}")
     print("Close this terminal window or press Ctrl+C to stop the simulator.")
     print("=" * 60)
     
