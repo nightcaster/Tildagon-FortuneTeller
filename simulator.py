@@ -2240,7 +2240,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 return;
             }
             const template = rng.choice(templateList);
-            const fortune = generateFortuneJS(template, seedVal);
+            const fortune = generateFortuneJS(template, rng);
             elDirectLookupResult.style.display = 'block';
             elDirectLookupResult.style.color = 'var(--accent-cyan)';
             elDirectLookupResult.innerHTML = `<strong>Fortune:</strong> "${fortune}"<br><span style="font-size:0.8rem;opacity:0.8;display:block;margin-top:0.25rem;">(Template: ${template} &bull; Vibe: ${vibeRoll < 85 ? 'upbeat' : 'ominous'})</span>`;
@@ -2787,8 +2787,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             return { choice: outputParts.join(" "), isPlural };
         }
 
-        function generateFortuneJS(template, stepSeed) {
-            let rng = new SeededRandomJS(stepSeed);
+        function generateFortuneJS(template, stepSeedOrRng) {
+            let rng;
+            if (stepSeedOrRng && typeof stepSeedOrRng.nextInt === 'function') {
+                rng = stepSeedOrRng;
+            } else {
+                rng = new SeededRandomJS(stepSeedOrRng);
+            }
             let result = template;
             let usedTerms = new Set();
 
