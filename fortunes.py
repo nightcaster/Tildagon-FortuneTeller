@@ -166,8 +166,6 @@ TERMS = {
         ("hackers", "plural"),
         ("hardware wizard", "countable"),
         ("hardware wizards", "plural"),
-        ("duck", "countable"),
-        ("ducks", "plural"),
         ("event sponsor", "countable"),
         ("event sponsors", "plural"),
         ("Null Sector DJ", "countable"),
@@ -185,8 +183,10 @@ TERMS = {
         ("spider wearing a tiny high-vis vest", "countable"),
         ("spiders wearing tiny high-vis vests", "plural"),
         ("GPS rave bots", "plural"),
+        ("sentient hexpansion", "countable"),
         ("hexpansions", "plural"),
         ("volunteers", "plural"),
+        ("rogue deer", "countable"),
         ("rogue deer", "plural"),
     ],
     "COMPUTE_VERB": [
@@ -205,12 +205,25 @@ TERMS = {
         "re-solder",
     ],
     "SOCIAL_VERB": [
-        "trade with",
-        "spill a drink on",
-        "buy a drink for",
-        "discover",
-        "find",
-        "misplace",
+        # Entries are (plural/infinitive form, third-person singular form)
+        ("trade with",       "trades with"),
+        ("spill a drink on", "spills a drink on"),
+        ("buy a drink for",  "buys a drink for"),
+        ("discover",         "discovers"),
+        ("find",             "finds"),
+        ("misplace",         "misplaces"),
+    ],
+    "HACKER_ADVERB": [
+        "enthusiastically",
+        "frantically",
+        "accidentally",
+        "mysteriously",
+        "quietly",
+        "nervously",
+        "suspiciously",
+        "hastily",
+        "reluctantly",
+        "unexpectedly",
     ],
     "ACTIVE_DEVICE": [
         ("Tildagon", "countable"),
@@ -448,7 +461,7 @@ TERMS = {
 }
 
 UPBEAT_TEMPLATES = [
-    "{PEOPLE_SUBJECT} will {SOCIAL_VERB} {CREATURE}.",
+    "You're in luck if {PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB} {CREATURE}.",
     "Try {CAMP_ACTION_ACTIVE} at {DESTINATION}.",
     "Your code will finally compile after {VISIT_TYPE} {MAP_LOCATION}.",
     "{CREATURE_PLURAL_COLLECTIVE} riding {CREATURE_PLURAL} will bring great fortune to {VILLAGE}.",
@@ -550,7 +563,8 @@ COLLECTIVE_PREFIXES = [
     "tsunami of",
     "mob of",
     "cabal of",
-    "flock of"
+    "flock of",
+    "some"
 ]
 
 def format_item(adjective, item, rng=None, add_collective=False):
@@ -608,6 +622,67 @@ def _resolve_key(key):
         key = key[:-len("_PLURAL")]
         plural_only = True
     return key, plural_only, add_collective
+
+# Noun-type markers recognised in TERMS tuple entries
+_NOUN_TYPES = ("countable", "plural", "mass")
+
+def _resolve_chain(chain_key, rng, used_terms, active_plural):
+    """
+    Resolve a '+'-chained placeholder such as 'PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB'.
+    Parts are resolved left to right. The first noun's plurality drives verb agreement.
+
+    Entry type detection (per TERMS entry):
+      tuple where [1] in _NOUN_TYPES        -> noun  (formatted with format_item)
+      tuple where [1] not in _NOUN_TYPES    -> verb pair: [0]=plural/infinitive, [1]=singular
+      plain string                          -> adverb / adjective (used as-is)
+
+    Returns (formatted_text, is_plural).
+    Updates active_plural with the first noun's base_key.
+
+    Examples:
+      'PEOPLE_SUBJECT+SOCIAL_VERB'
+        plural  subject -> 'hackers misplace'
+        singular subject -> 'a furry misplaces'
+      'PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB'
+        -> 'hackers frantically misplace' / 'a furry accidentally misplaces'
+      'PEOPLE_SUBJECT+SOCIAL_VERB?themselves|themself'
+        (the ?suffix is stripped before calling this fn; only the chain part is passed)
+    """
+    parts = chain_key.split("+")
+    output_parts = []
+    subject_is_plural = None
+
+    for part in parts:
+        base_key, plural_only, add_coll = _resolve_key(part)
+
+        if base_key not in TERMS:
+            continue
+
+        pool = TERMS[base_key]
+        if plural_only:
+            pool = [e for e in pool if isinstance(e, tuple) and e[1] == "plural"]
+
+        choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+
+        if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+            # Noun — format with article / collective prefix
+            formatted = format_item("", choice, rng, add_collective=add_coll)
+            is_pl = (choice[1] == "plural" and not formatted.lower().startswith(("a ", "an ")))
+            if subject_is_plural is None:
+                subject_is_plural = is_pl
+                active_plural[base_key] = is_pl
+                active_plural[base_key + "_COLLECTIVE"] = is_pl
+            output_parts.append(formatted)
+        elif isinstance(choice, tuple):
+            # Verb pair — pick form based on subject plurality
+            is_pl = subject_is_plural if subject_is_plural is not None else False
+            output_parts.append(choice[0] if is_pl else choice[1])
+        else:
+            # Plain string (adverb / adjective) — use as-is
+            output_parts.append(choice)
+
+    is_plural = subject_is_plural if subject_is_plural is not None else False
+    return " ".join(output_parts), is_plural
 
 def choose_unique(rng, values, used_terms):
     available = [v for v in values if (v[0] if isinstance(v, (list, tuple)) else v) not in used_terms]
@@ -670,82 +745,91 @@ def generate_fortune(seed_val):
             key = parts[0]
             options = parts[1].split("|")
 
-            base_key, plural_only, add_coll = _resolve_key(key)
-
-            if base_key in TERMS:
-                pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
-                choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
-                if isinstance(choice, (list, tuple)):
-                    itype = choice[1]
-                    choice = format_item("", choice, rng, add_collective=add_coll)
-                    is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
-                else:
-                    choice = format_item("", choice, rng, add_collective=add_coll)
-                    is_plural = False
-
-                active_plural[base_key] = is_plural
-                active_plural[base_key + "_COLLECTIVE"] = is_plural
-
-                suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                if suffix and suffix[0].isalnum():
-                    val = choice + " " + suffix
-                else:
-                    val = choice + suffix
-                result = result[:idx] + val + result[end_idx+1:]
-                i = idx + len(val)
-            elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
-                values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
-                choice = choose_unique(rng, values, used_terms)
-                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                    context_before = result[max(0, idx - 20):idx]
-                    choice = format_village(choice, context_before)
-                is_plural = False
-                active_plural[key] = is_plural
-
-                suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                if suffix and suffix[0].isalnum():
-                    val = choice + " " + suffix
-                else:
-                    val = choice + suffix
-                result = result[:idx] + val + result[end_idx+1:]
-                i = idx + len(val)
+            if "+" in key:
+                # Chain with conditional suffix: e.g. "{PEOPLE_SUBJECT+SOCIAL_VERB?themselves|themself}"
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
             else:
-                is_plural = active_plural.get(key, False)
-                verb = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                result = result[:idx] + verb + result[end_idx+1:]
-                i = idx + len(verb)
+                base_key, plural_only, add_coll = _resolve_key(key)
+
+                if base_key in TERMS:
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+                        itype = choice[1]
+                        choice = format_item("", choice, rng, add_collective=add_coll)
+                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                    elif isinstance(choice, tuple):
+                        choice = choice[0]  # verb pair: use infinitive/plural form
+                        is_plural = False
+                    else:
+                        is_plural = False  # plain string: use as-is
+
+                    active_plural[base_key] = is_plural
+                    active_plural[base_key + "_COLLECTIVE"] = is_plural
+                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
+                    choice = choose_unique(rng, values, used_terms)
+                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                        context_before = result[max(0, idx - 20):idx]
+                        choice = format_village(choice, context_before)
+                    is_plural = False
+                    active_plural[key] = is_plural
+                else:
+                    # Reference to a previously resolved key's plurality
+                    is_plural = active_plural.get(key, False)
+                    verb = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+                    result = result[:idx] + verb + result[end_idx+1:]
+                    i = idx + len(verb)
+                    continue
+
+            suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+            if suffix and suffix[0].isalnum():
+                val = choice + " " + suffix
+            else:
+                val = choice + suffix
+            result = result[:idx] + val + result[end_idx+1:]
+            i = idx + len(val)
         else:
             # Standard placeholder
             key = tag
-            base_key, plural_only, add_coll = _resolve_key(key)
 
-            if base_key in TERMS:
-                pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
-                choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
-                if isinstance(choice, (list, tuple)):
-                    itype = choice[1]
-                    choice = format_item("", choice, rng, add_collective=add_coll)
-                    is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
-                else:
-                    choice = format_item("", choice, rng, add_collective=add_coll)
-                    is_plural = False
-
-                active_plural[base_key] = is_plural
-                active_plural[base_key + "_COLLECTIVE"] = is_plural
-
-                result = result[:idx] + choice + result[end_idx+1:]
-                i = idx + len(choice)
-            elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
-                values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
-                choice = choose_unique(rng, values, used_terms)
-                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                    context_before = result[max(0, idx - 20):idx]
-                    choice = format_village(choice, context_before)
-                active_plural[key] = False
+            if "+" in key:
+                # Chain: e.g. "{PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB}"
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
                 result = result[:idx] + choice + result[end_idx+1:]
                 i = idx + len(choice)
             else:
-                i = end_idx + 1
+                base_key, plural_only, add_coll = _resolve_key(key)
+
+                if base_key in TERMS:
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+                        itype = choice[1]
+                        choice = format_item("", choice, rng, add_collective=add_coll)
+                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                    elif isinstance(choice, tuple):
+                        choice = choice[0]  # verb pair: use infinitive/plural form
+                        is_plural = False
+                    else:
+                        is_plural = False  # plain string: use as-is
+
+                    active_plural[base_key] = is_plural
+                    active_plural[base_key + "_COLLECTIVE"] = is_plural
+
+                    result = result[:idx] + choice + result[end_idx+1:]
+                    i = idx + len(choice)
+                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
+                    choice = choose_unique(rng, values, used_terms)
+                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                        context_before = result[max(0, idx - 20):idx]
+                        choice = format_village(choice, context_before)
+                    active_plural[key] = False
+                    result = result[:idx] + choice + result[end_idx+1:]
+                    i = idx + len(choice)
+                else:
+                    i = end_idx + 1
 
     if result:
         result = result[0].upper() + result[1:]
@@ -836,54 +920,10 @@ def generate_fortune_metadata(seed_val):
             key = parts[0]
             options = parts[1].split("|")
 
-            base_key, plural_only, add_coll = _resolve_key(key)
-
-            if base_key in TERMS:
-                pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
-                choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
-                raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
-                if isinstance(choice, (list, tuple)):
-                    itype = choice[1]
-                    choice = format_item("", choice, rng, add_collective=add_coll)
-                    is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
-                else:
-                    choice = format_item("", choice, rng, add_collective=add_coll)
-                    is_plural = False
-
-                active_plural[base_key] = is_plural
-                active_plural[base_key + "_COLLECTIVE"] = is_plural
-
-                suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                if suffix and suffix[0].isalnum():
-                    suffix_val = " " + suffix
-                else:
-                    suffix_val = suffix
-
-                new_tokens = []
-                if left_text:
-                    new_tokens.append({"type": "text", "value": left_text})
-                new_tokens.append({
-                    "type": "term",
-                    "key": base_key,
-                    "value": choice,
-                    "raw_value": raw_choice,
-                    "adj": "",
-                    "add_collective": add_coll
-                })
-                new_tokens.append({"type": "text", "value": suffix_val + right_text})
-
-                tokens[token_idx:token_idx+1] = new_tokens
-            elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
-                values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
-                choice = choose_unique(rng, values, used_terms)
-                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                    full_text_before = "".join(t["value"] for t in tokens[:token_idx]) + left_text
-                    context_before = full_text_before[max(0, len(full_text_before) - 20):]
-                    choice = format_village(choice, context_before)
-
-                is_plural = False
-                active_plural[key] = is_plural
-
+            if "+" in key:
+                # Chain with conditional suffix: e.g. "{PEOPLE_SUBJECT+SOCIAL_VERB?themselves|themself}"
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
+                raw_choice = choice
                 suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
                 if suffix and suffix[0].isalnum():
                     suffix_val = " " + suffix
@@ -897,61 +937,92 @@ def generate_fortune_metadata(seed_val):
                     "type": "term",
                     "key": key,
                     "value": choice,
-                    "raw_value": choice,
-                    "adj": ""
+                    "raw_value": raw_choice,
+                    "adj": "",
+                    "add_collective": False
                 })
                 new_tokens.append({"type": "text", "value": suffix_val + right_text})
-
                 tokens[token_idx:token_idx+1] = new_tokens
             else:
-                is_plural = active_plural.get(key, False)
-                verb = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                token["value"] = left_text + verb + right_text
+                base_key, plural_only, add_coll = _resolve_key(key)
+
+                if base_key in TERMS:
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+                    raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+                        itype = choice[1]
+                        choice = format_item("", choice, rng, add_collective=add_coll)
+                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                    elif isinstance(choice, tuple):
+                        raw_choice = choice[0]
+                        choice = choice[0]  # verb pair: use infinitive/plural form
+                        is_plural = False
+                    else:
+                        is_plural = False  # plain string: use as-is
+
+                    active_plural[base_key] = is_plural
+                    active_plural[base_key + "_COLLECTIVE"] = is_plural
+
+                    suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+                    if suffix and suffix[0].isalnum():
+                        suffix_val = " " + suffix
+                    else:
+                        suffix_val = suffix
+
+                    new_tokens = []
+                    if left_text:
+                        new_tokens.append({"type": "text", "value": left_text})
+                    new_tokens.append({
+                        "type": "term",
+                        "key": base_key,
+                        "value": choice,
+                        "raw_value": raw_choice,
+                        "adj": "",
+                        "add_collective": add_coll
+                    })
+                    new_tokens.append({"type": "text", "value": suffix_val + right_text})
+                    tokens[token_idx:token_idx+1] = new_tokens
+                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
+                    choice = choose_unique(rng, values, used_terms)
+                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                        full_text_before = "".join(t["value"] for t in tokens[:token_idx]) + left_text
+                        context_before = full_text_before[max(0, len(full_text_before) - 20):]
+                        choice = format_village(choice, context_before)
+
+                    is_plural = False
+                    active_plural[key] = is_plural
+
+                    suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+                    if suffix and suffix[0].isalnum():
+                        suffix_val = " " + suffix
+                    else:
+                        suffix_val = suffix
+
+                    new_tokens = []
+                    if left_text:
+                        new_tokens.append({"type": "text", "value": left_text})
+                    new_tokens.append({
+                        "type": "term",
+                        "key": key,
+                        "value": choice,
+                        "raw_value": choice,
+                        "adj": ""
+                    })
+                    new_tokens.append({"type": "text", "value": suffix_val + right_text})
+                    tokens[token_idx:token_idx+1] = new_tokens
+                else:
+                    is_plural = active_plural.get(key, False)
+                    verb = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+                    token["value"] = left_text + verb + right_text
         else:
             # Standard placeholder
             key = tag
-            base_key, plural_only, add_coll = _resolve_key(key)
 
-            if base_key in TERMS:
-                pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
-                choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
-                raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
-                if isinstance(choice, (list, tuple)):
-                    itype = choice[1]
-                    choice = format_item("", choice, rng, add_collective=add_coll)
-                    is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
-                else:
-                    choice = format_item("", choice, rng, add_collective=add_coll)
-                    is_plural = False
-
-                active_plural[base_key] = is_plural
-                active_plural[base_key + "_COLLECTIVE"] = is_plural
-
-                new_tokens = []
-                if left_text:
-                    new_tokens.append({"type": "text", "value": left_text})
-                new_tokens.append({
-                    "type": "term",
-                    "key": base_key,
-                    "value": choice,
-                    "raw_value": raw_choice,
-                    "adj": "",
-                    "add_collective": add_coll
-                })
-                if right_text:
-                    new_tokens.append({"type": "text", "value": right_text})
-
-                tokens[token_idx:token_idx+1] = new_tokens
-            elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
-                values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
-                choice = choose_unique(rng, values, used_terms)
-                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                    full_text_before = "".join(t["value"] for t in tokens[:token_idx]) + left_text
-                    context_before = full_text_before[max(0, len(full_text_before) - 20):]
-                    choice = format_village(choice, context_before)
-                    
-                active_plural[key] = False
-                
+            if "+" in key:
+                # Chain: e.g. "{PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB}"
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
                 new_tokens = []
                 if left_text:
                     new_tokens.append({"type": "text", "value": left_text})
@@ -960,14 +1031,72 @@ def generate_fortune_metadata(seed_val):
                     "key": key,
                     "value": choice,
                     "raw_value": choice,
-                    "adj": ""
+                    "adj": "",
+                    "add_collective": False
                 })
                 if right_text:
                     new_tokens.append({"type": "text", "value": right_text})
-                    
                 tokens[token_idx:token_idx+1] = new_tokens
             else:
-                token_idx += 1
+                base_key, plural_only, add_coll = _resolve_key(key)
+
+                if base_key in TERMS:
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+                    raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+                        itype = choice[1]
+                        choice = format_item("", choice, rng, add_collective=add_coll)
+                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                    elif isinstance(choice, tuple):
+                        raw_choice = choice[0]
+                        choice = choice[0]  # verb pair: use infinitive/plural form
+                        is_plural = False
+                    else:
+                        is_plural = False  # plain string: use as-is
+
+                    active_plural[base_key] = is_plural
+                    active_plural[base_key + "_COLLECTIVE"] = is_plural
+
+                    new_tokens = []
+                    if left_text:
+                        new_tokens.append({"type": "text", "value": left_text})
+                    new_tokens.append({
+                        "type": "term",
+                        "key": base_key,
+                        "value": choice,
+                        "raw_value": raw_choice,
+                        "adj": "",
+                        "add_collective": add_coll
+                    })
+                    if right_text:
+                        new_tokens.append({"type": "text", "value": right_text})
+                    tokens[token_idx:token_idx+1] = new_tokens
+                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
+                    choice = choose_unique(rng, values, used_terms)
+                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                        full_text_before = "".join(t["value"] for t in tokens[:token_idx]) + left_text
+                        context_before = full_text_before[max(0, len(full_text_before) - 20):]
+                        choice = format_village(choice, context_before)
+
+                    active_plural[key] = False
+
+                    new_tokens = []
+                    if left_text:
+                        new_tokens.append({"type": "text", "value": left_text})
+                    new_tokens.append({
+                        "type": "term",
+                        "key": key,
+                        "value": choice,
+                        "raw_value": choice,
+                        "adj": ""
+                    })
+                    if right_text:
+                        new_tokens.append({"type": "text", "value": right_text})
+                    tokens[token_idx:token_idx+1] = new_tokens
+                else:
+                    token_idx += 1
 
     if tokens and tokens[0]["value"]:
         val = tokens[0]["value"]
