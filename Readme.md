@@ -19,6 +19,21 @@ A MicroPython application for the EMF 2024/2026 Tildagon Badge. This app emulate
    - Fortunes are generated from a stable daily seed based on the current date and your badge's unique ID, so every day brings new predictions.
    - Press any button to restart or hold CANCEL (Button 6/F) for 3 seconds to exit.
 
+## Template Syntax & Fortune Resolution
+
+The application dynamically generates fortunes from templates (defined in `fortunes.py`) using a rule-based parser that handles grammar, plurality, and verb forms:
+
+1. **Placeholders:** Basic tokens like `{CREATURE}` or `{MAP_LOCATION}` are randomly chosen from corresponding pools in the `TERMS` dictionary.
+2. **Chaining (`+`):** Multiple tags can be chained together (e.g. `{PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB}`). The parser resolves each element left-to-right:
+   - Adjectives can be placed before nouns (e.g. `{TECH_ADJECTIVE+TECH_ITEM}`).
+   - Nouns resolved in the chain determine the overall subject plurality.
+3. **Plurality Agreement:** 
+   - Verb options are stored as pairs (e.g. `("trade with", "trades with")`).
+   - Verbs resolved in a chain (or subsequent verb tags) automatically agree with the subject noun's plurality.
+   - If a chain doesn't contain a subject noun (e.g. `{HACKER_ADVERB+SOCIAL_VERB}`), the verb falls back to agree with the most recently resolved noun.
+4. **Modal Verbs:** If the verb (or chain containing a verb) is preceded by a modal or infinitive marker (such as `will`, `would`, `shall`, `should`, `can`, `could`, `may`, `might`, `must`, `to`), the parser automatically forces the verb into its infinitive/plural form (e.g. `"will quietly discover"` instead of `"will quietly discovers"`).
+5. **Conditional Suffixes (`?`):** You can append conditional text based on the resolved tag's plurality, formatted as `{TAG?plural_suffix|singular_suffix}` (e.g. `{PEOPLE_SUBJECT?are coding late|is coding late}`).
+
 ## Development and Testing
 
 Upload the application files (`app.py`, `fortunes.py`, `tildagon.toml`, `__init__.py`) to the case-sensitive `:apps/FortuneTeller` folder on the Tildagon badge (for example, using `mpremote fs cp`).
