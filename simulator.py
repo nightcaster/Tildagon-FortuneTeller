@@ -1854,6 +1854,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- Direct Seed Lookup -->
+                <div class="glass-card sidebar-section">
+                    <h2>Direct Seed Lookup</h2>
+                    <div class="form-group">
+                        <label for="input-direct-seed">Badge Screen Seed</label>
+                        <input type="number" id="input-direct-seed" class="input-control" placeholder="Enter seed from screen...">
+                        <button class="btn btn-accent" id="btn-lookup-seed" style="width: 100%; margin-top: 0.75rem;">🔍 Lookup Fortune</button>
+                    </div>
+                    <div id="direct-lookup-result" style="margin-top: 0.75rem; font-style: italic; font-size: 0.95rem; color: var(--accent-cyan); display: none; padding: 0.75rem; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--panel-border); white-space: normal; word-break: break-word; line-height: 1.4;"></div>
+                </div>
+
                 <!-- Date & Badge Calculator -->
                 <div class="glass-card sidebar-section">
                     <h2>Daily Seed Calculator</h2>
@@ -2112,6 +2123,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         // Elements
         const elSeedInput = document.getElementById('input-seed');
+        const elInputDirectSeed = document.getElementById('input-direct-seed');
+        const elBtnLookupSeed = document.getElementById('btn-lookup-seed');
+        const elDirectLookupResult = document.getElementById('direct-lookup-result');
         const elBtnRandom = document.getElementById('btn-random-seed');
         const elBtnToday = document.getElementById('btn-today-seed');
         const elBadgeIdInput = document.getElementById('input-badge-id');
@@ -2208,6 +2222,36 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
 
         // Event Listeners
+        elBtnLookupSeed.addEventListener('click', () => {
+            const seedVal = parseInt(elInputDirectSeed.value);
+            if (isNaN(seedVal)) {
+                elDirectLookupResult.style.display = 'block';
+                elDirectLookupResult.style.color = '#ff6b6b';
+                elDirectLookupResult.innerText = "Please enter a valid numeric seed.";
+                return;
+            }
+            const rng = new SeededRandomJS(seedVal);
+            const vibeRoll = rng.nextInt() % 100;
+            const templateList = vibeRoll < 85 ? config.UPBEAT_TEMPLATES : config.OMINOUS_TEMPLATES;
+            if (!templateList || templateList.length === 0) {
+                elDirectLookupResult.style.display = 'block';
+                elDirectLookupResult.style.color = '#ff6b6b';
+                elDirectLookupResult.innerText = "No templates loaded yet.";
+                return;
+            }
+            const template = rng.choice(templateList);
+            const fortune = generateFortuneJS(template, seedVal);
+            elDirectLookupResult.style.display = 'block';
+            elDirectLookupResult.style.color = 'var(--accent-cyan)';
+            elDirectLookupResult.innerHTML = `<strong>Fortune:</strong> "${fortune}"<br><span style="font-size:0.8rem;opacity:0.8;display:block;margin-top:0.25rem;">(Template: ${template} &bull; Vibe: ${vibeRoll < 85 ? 'upbeat' : 'ominous'})</span>`;
+        });
+
+        elInputDirectSeed.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                elBtnLookupSeed.click();
+            }
+        });
+
         elBtnRandom.addEventListener('click', () => {
             const randSeed = Math.floor(Math.random() * 2147483647);
             elSeedInput.value = randSeed;
