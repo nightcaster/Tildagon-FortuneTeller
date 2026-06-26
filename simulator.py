@@ -273,6 +273,58 @@ def fix_a_an(text):
                     words[i] = "An" if words[i] == "A" else "an"
     return " ".join(words)
 
+def remove_possessive_articles(text):
+    possessives = {"your", "my", "his", "her", "its", "our", "their"}
+    words = text.split(" ")
+    i = 0
+    while i < len(words):
+        word_lower = words[i].lower()
+        if word_lower in ("a", "an"):
+            preceded = False
+            if i - 1 >= 0:
+                prev_1 = words[i-1].lower().strip(".,;:!?\"'()")
+                if prev_1 in possessives:
+                    preceded = True
+                elif i - 2 >= 0:
+                    prev_2 = words[i-2].lower().strip(".,;:!?\"'()")
+                    if prev_2 in possessives:
+                        preceded = True
+            if preceded:
+                words.pop(i)
+                continue
+        i += 1
+    return " ".join(words)
+
+def clean_possessive_articles_tokens(tokens):
+    possessives = {"your", "my", "his", "her", "its", "our", "their"}
+    for i in range(len(tokens)):
+        token = tokens[i]
+        if token["type"] == "text":
+            token["value"] = remove_possessive_articles(token["value"])
+        elif token["type"] == "term":
+            val = token["value"]
+            val_lower = val.lower()
+            prefix_len = 0
+            if val_lower.startswith("a "):
+                prefix_len = 2
+            elif val_lower.startswith("an "):
+                prefix_len = 3
+                
+            if prefix_len > 0:
+                preceding_text = "".join(t["value"] for t in tokens[:i])
+                words = preceding_text.split()
+                preceded = False
+                if len(words) >= 1:
+                    prev_1 = words[-1].lower().strip(".,;:!?\"'()")
+                    if prev_1 in possessives:
+                        preceded = True
+                    elif len(words) >= 2:
+                        prev_2 = words[-2].lower().strip(".,;:!?\"'()")
+                        if prev_2 in possessives:
+                            preceded = True
+                if preceded:
+                    token["value"] = val[prefix_len:]
+
 COLLECTIVE_PREFIXES = [
     "herd of",
     "gaggle of",
@@ -567,6 +619,7 @@ def generate_fortune(seed_val):
     if result:
         result = result[0].upper() + result[1:]
         result = fix_a_an(result)
+        result = remove_possessive_articles(result)
     return result
 
 def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
@@ -832,6 +885,7 @@ def generate_fortune_metadata(seed_val):
             if changed:
                 token["value"] = " ".join(parts)
 
+    clean_possessive_articles_tokens(tokens)
     return {
         "template": template,
         "vibe": vibe,
@@ -2972,6 +3026,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             if (result) {
                 result = result.charAt(0).toUpperCase() + result.slice(1);
                 result = fixAAnJS(result);
+                result = removePossessiveArticlesJS(result);
             }
             return result;
         }
@@ -3368,6 +3423,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     }
                 }
             }
+            cleanPossessiveArticlesTokensJS(tokens);
         }
 
         function renderModalOptionsList() {
@@ -3982,6 +4038,76 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 }
             }
             return words.join(" ");
+        }
+
+        function removePossessiveArticlesJS(text) {
+            let possessives = new Set(["your", "my", "his", "her", "its", "our", "their"]);
+            let words = text.split(" ");
+            let i = 0;
+            while (i < words.length) {
+                let word_lower = words[i].toLowerCase();
+                if (word_lower === "a" || word_lower === "an") {
+                    let preceded = false;
+                    if (i - 1 >= 0) {
+                        let prev_1 = words[i-1].toLowerCase().replace(/^[.,;:!?"'()]+|[.,;:!?"'()]+$/g, "");
+                        if (possessives.has(prev_1)) {
+                            preceded = true;
+                        } else if (i - 2 >= 0) {
+                            let prev_2 = words[i-2].toLowerCase().replace(/^[.,;:!?"'()]+|[.,;:!?"'()]+$/g, "");
+                            if (possessives.has(prev_2)) {
+                                preceded = true;
+                            }
+                        }
+                    }
+                    if (preceded) {
+                        words.splice(i, 1);
+                        continue;
+                    }
+                }
+                i++;
+            }
+            return words.join(" ");
+        }
+
+        function cleanPossessiveArticlesTokensJS(tokens) {
+            let possessives = new Set(["your", "my", "his", "her", "its", "our", "their"]);
+            for (let i = 0; i < tokens.length; i++) {
+                let token = tokens[i];
+                if (token.type === "text") {
+                    token.value = removePossessiveArticlesJS(token.value);
+                } else if (token.type === "term") {
+                    let val = token.value;
+                    let val_lower = val.toLowerCase();
+                    let prefix_len = 0;
+                    if (val_lower.startsWith("a ")) {
+                        prefix_len = 2;
+                    } else if (val_lower.startsWith("an ")) {
+                        prefix_len = 3;
+                    }
+                    if (prefix_len > 0) {
+                        let preceding_text = "";
+                        for (let j = 0; j < i; j++) {
+                            preceding_text += tokens[j].value;
+                        }
+                        let words = preceding_text.trim().split(/\s+/);
+                        let preceded = false;
+                        if (words.length >= 1) {
+                            let prev_1 = words[words.length - 1].toLowerCase().replace(/^[.,;:!?"'()]+|[.,;:!?"'()]+$/g, "");
+                            if (possessives.has(prev_1)) {
+                                preceded = true;
+                            } else if (words.length >= 2) {
+                                let prev_2 = words[words.length - 2].toLowerCase().replace(/^[.,;:!?"'()]+|[.,;:!?"'()]+$/g, "");
+                                if (possessives.has(prev_2)) {
+                                    preceded = true;
+                                }
+                            }
+                        }
+                        if (preceded) {
+                            token.value = val.substring(prefix_len);
+                        }
+                    }
+                }
+            }
         }
 
         function updateTotalFortunesCount() {

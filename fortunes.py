@@ -205,13 +205,12 @@ TERMS = {
         "re-solder",
     ],
     "SOCIAL_VERB": [
-        # Entries are (plural/infinitive form, third-person singular form)
-        ("trade with",       "trades with"),
+        ("trade with", "trades with"),
         ("spill a drink on", "spills a drink on"),
-        ("buy a drink for",  "buys a drink for"),
-        ("discover",         "discovers"),
-        ("find",             "finds"),
-        ("misplace",         "misplaces"),
+        ("buy a drink for", "buys a drink for"),
+        ("discover", "discovers"),
+        ("find", "finds"),
+        ("misplace", "misplaces"),
     ],
     "HACKER_ADVERB": [
         "enthusiastically",
@@ -467,7 +466,7 @@ UPBEAT_TEMPLATES = [
     "{CREATURE_PLURAL_COLLECTIVE} riding {CREATURE_PLURAL} will bring great fortune to {VILLAGE}.",
     "{PEOPLE_SUBJECT_COLLECTIVE} will {CAMP_ACTION} .",
     "{VISIT_TYPE} {VILLAGE} will inspire you to {CAMP_ACTION}.",
-    "You will discover {TECH_ADJECTIVE+TECH_ITEM} while trying to {HACKER_ACTION}.",
+    "{CREATURE} will {SOCIAL_VERB+PEOPLE_SUBJECT} near {MAP_LOCATION}.",
     "You will discover {CRAFT_ADJECTIVE+CRAFT_ITEM} while trying to {HACKER_ACTION}.",
     "Your {ACTIVE_DEVICE} will flawlessly {COMPUTE_VERB} {COMPUTE_TARGET}.",
     "While trying to {HACKER_ACTION} at {DESTINATION}, {ABSURD_OBJECT} will appear.",
@@ -549,12 +548,64 @@ def fix_a_an(text):
     words = text.split(" ")
     for i in range(len(words) - 1):
         if words[i] == "a" or (i == 0 and words[i] == "A"):
-            clean_next = words[i+1].lstrip("`\"'(")
+            clean_next = words[i+1].lstrip("`\\\"'(")
             if clean_next and clean_next[0] in vowels:
                 first_word = clean_next.lower().strip(".,;:!?\"'()")
                 if not first_word.startswith("usb"):
                     words[i] = "An" if words[i] == "A" else "an"
     return " ".join(words)
+
+def remove_possessive_articles(text):
+    possessives = {"your", "my", "his", "her", "its", "our", "their"}
+    words = text.split(" ")
+    i = 0
+    while i < len(words):
+        word_lower = words[i].lower()
+        if word_lower in ("a", "an"):
+            preceded = False
+            if i - 1 >= 0:
+                prev_1 = words[i-1].lower().strip(".,;:!?\"'()")
+                if prev_1 in possessives:
+                    preceded = True
+                elif i - 2 >= 0:
+                    prev_2 = words[i-2].lower().strip(".,;:!?\"'()")
+                    if prev_2 in possessives:
+                        preceded = True
+            if preceded:
+                words.pop(i)
+                continue
+        i += 1
+    return " ".join(words)
+
+def clean_possessive_articles_tokens(tokens):
+    possessives = {"your", "my", "his", "her", "its", "our", "their"}
+    for i in range(len(tokens)):
+        token = tokens[i]
+        if token["type"] == "text":
+            token["value"] = remove_possessive_articles(token["value"])
+        elif token["type"] == "term":
+            val = token["value"]
+            val_lower = val.lower()
+            prefix_len = 0
+            if val_lower.startswith("a "):
+                prefix_len = 2
+            elif val_lower.startswith("an "):
+                prefix_len = 3
+                
+            if prefix_len > 0:
+                preceding_text = "".join(t["value"] for t in tokens[:i])
+                words = preceding_text.split()
+                preceded = False
+                if len(words) >= 1:
+                    prev_1 = words[-1].lower().strip(".,;:!?\"'()")
+                    if prev_1 in possessives:
+                        preceded = True
+                    elif len(words) >= 2:
+                        prev_2 = words[-2].lower().strip(".,;:!?\"'()")
+                        if prev_2 in possessives:
+                            preceded = True
+                if preceded:
+                    token["value"] = val[prefix_len:]
 
 COLLECTIVE_PREFIXES = [
     "herd of",
@@ -850,6 +901,7 @@ def generate_fortune(seed_val):
     if result:
         result = result[0].upper() + result[1:]
         result = fix_a_an(result)
+        result = remove_possessive_articles(result)
     return result
 
 def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
@@ -872,50 +924,8 @@ def generate_fortune_metadata(seed_val):
         
     tokens = [{"type": "text", "value": template}]
     used_terms = set()
-
-    # Helper to resolve compound placeholders in tokens list
-    def replace_compound_placeholder(placeholder, key_name, adj_source, item_source, fixed_adj=None):
-        while True:
-            found_idx = -1
-            for idx, token in enumerate(tokens):
-                if token["type"] == "text" and placeholder in token["value"]:
-                    found_idx = idx
-                    break
-            if found_idx == -1:
-                break
-                
-            adj = fixed_adj if fixed_adj is not None else choose_unique(rng, adj_source, used_terms)
-            item = choose_unique(rng, item_source, used_terms)
-            
-            formatted_val = format_item(adj, item, rng)
-            raw_val = item[0] if isinstance(item, (list, tuple)) else item
-            
-            token_text = tokens[found_idx]["value"]
-            split_idx = token_text.find(placeholder)
-            left_text = token_text[:split_idx]
-            right_text = token_text[split_idx + len(placeholder):]
-            
-            new_tokens = []
-            if left_text:
-                new_tokens.append({"type": "text", "value": left_text})
-            new_tokens.append({
-                "type": "term",
-                "key": key_name,
-                "value": formatted_val,
-                "raw_value": raw_val,
-                "adj": adj
-            })
-            if right_text:
-                new_tokens.append({"type": "text", "value": right_text})
-                
-            tokens[found_idx:found_idx+1] = new_tokens
-
-    replace_compound_placeholder("{TECH_ADJECTIVE_ITEM}", "TECH_ITEM", TERMS["TECH_ADJECTIVE"], TERMS["TECH_ITEM"])
-    replace_compound_placeholder("{CRAFT_ADJECTIVE_ITEM}", "CRAFT_ITEM", TERMS["CRAFT_ADJECTIVE"], TERMS["CRAFT_ITEM"])
-    replace_compound_placeholder("{TECH_SHINY_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "shiny")
-    replace_compound_placeholder("{TECH_RARE_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "rare")
-
     active_plural = {}
+
     token_idx = 0
     while token_idx < len(tokens):
         token = tokens[token_idx]
@@ -944,9 +954,7 @@ def generate_fortune_metadata(seed_val):
             options = parts[1].split("|")
 
             if "+" in key:
-                # Chain with conditional suffix: e.g. "{PEOPLE_SUBJECT+SOCIAL_VERB?themselves|themself}"
-                force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
-                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
                 raw_choice = choice
                 suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
                 if suffix and suffix[0].isalnum():
@@ -980,16 +988,10 @@ def generate_fortune_metadata(seed_val):
                         is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
-                        force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
-                        if force_inf:
-                            choice = choice[0]
-                        elif active_plural:
-                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
-                        else:
-                            choice = choice[0]
+                        choice = choice[0]
                         is_plural = False
                     else:
-                        is_plural = False  # plain string: use as-is
+                        is_plural = False
 
                     active_plural[base_key] = is_plural
                     active_plural[base_key + "_COLLECTIVE"] = is_plural
@@ -1051,9 +1053,7 @@ def generate_fortune_metadata(seed_val):
             key = tag
 
             if "+" in key:
-                # Chain: e.g. "{PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB}"
-                force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
-                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
                 new_tokens = []
                 if left_text:
                     new_tokens.append({"type": "text", "value": left_text})
@@ -1081,16 +1081,10 @@ def generate_fortune_metadata(seed_val):
                         is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
-                        force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
-                        if force_inf:
-                            choice = choice[0]
-                        elif active_plural:
-                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
-                        else:
-                            choice = choice[0]
+                        choice = choice[0]
                         is_plural = False
                     else:
-                        is_plural = False  # plain string: use as-is
+                        is_plural = False
 
                     active_plural[base_key] = is_plural
                     active_plural[base_key + "_COLLECTIVE"] = is_plural
@@ -1146,7 +1140,7 @@ def generate_fortune_metadata(seed_val):
             val = tokens[j]["value"]
             words = val.split()
             if words:
-                return words[0].lstrip("`\"'(")
+                return words[0].lstrip("`\\\"'(")
         return ""
 
     for i in range(len(tokens)):
@@ -1162,7 +1156,7 @@ def generate_fortune_metadata(seed_val):
                     if p_idx + 1 < len(parts):
                         for k in range(p_idx + 1, len(parts)):
                             if parts[k]:
-                                next_w = parts[k].lstrip("`\"'(")
+                                next_w = parts[k].lstrip("`\\\"'(")
                                 break
                     if not next_w:
                         next_w = get_next_word(i + 1)
@@ -1173,6 +1167,7 @@ def generate_fortune_metadata(seed_val):
             if changed:
                 token["value"] = " ".join(parts)
 
+    clean_possessive_articles_tokens(tokens)
     return {
         "template": template,
         "vibe": vibe,
