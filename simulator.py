@@ -268,7 +268,9 @@ def fix_a_an(text):
         if words[i] == "a" or (i == 0 and words[i] == "A"):
             clean_next = words[i+1].lstrip("`\\\"'(")
             if clean_next and clean_next[0] in vowels:
-                words[i] = "An" if words[i] == "A" else "an"
+                first_word = clean_next.lower().strip(".,;:!?\"'()")
+                if not first_word.startswith("usb"):
+                    words[i] = "An" if words[i] == "A" else "an"
     return " ".join(words)
 
 COLLECTIVE_PREFIXES = [
@@ -824,7 +826,7 @@ def generate_fortune_metadata(seed_val):
                     if not next_w:
                         next_w = get_next_word(i + 1)
                         
-                    if next_w and next_w[0] in vowels:
+                    if next_w and next_w[0] in vowels and not next_w.lower().startswith("usb"):
                         parts[p_idx] = "An" if word == "A" else "an"
                         changed = True
             if changed:
@@ -3355,7 +3357,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                             if (!next_w) {
                                 next_w = getNextWord(i + 1);
                             }
-                            if (next_w && vowels.includes(next_w[0])) {
+                            if (next_w && vowels.includes(next_w[0]) && !next_w.toLowerCase().startsWith("usb")) {
                                 parts[p_idx] = (word === "A") ? "An" : "an";
                                 changed = true;
                             }
@@ -3972,7 +3974,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 if (words[i] === "a" || (i === 0 && words[i] === "A")) {
                     let clean_next = words[i+1].replace(/^[`"'(]+/, "");
                     if (clean_next && vowels.includes(clean_next[0])) {
-                        words[i] = (words[i] === "A") ? "An" : "an";
+                        let first_word = clean_next.toLowerCase().replace(/^[.,;:!?"'()]+|[.,;:!?"'()]+$/g, "");
+                        if (!first_word.startsWith("usb")) {
+                            words[i] = (words[i] === "A") ? "An" : "an";
+                        }
                     }
                 }
             }

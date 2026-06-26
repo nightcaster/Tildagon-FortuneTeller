@@ -481,7 +481,7 @@ UPBEAT_TEMPLATES = [
     "Fortune awaits when you {HARDWARE_VERB} {HARDWARE_TARGET}.",
     "{PEOPLE_SUBJECT} at {DESTINATION} will offer you {TECH_SHINY_ITEM} in exchange for debugging assistance.",
     "Your {BENCH_TOOL} will work better near {VILLAGE}.",
-    "If you visit {DESTINATION} {TIME}, you might {PEOPLE_SUBJECT} {CAMP_ACTION}.",
+    "If you visit {DESTINATION} {TIME}, you might get to {CAMP_ACTION}.",
     "{PEOPLE_SUBJECT} at {DESTINATION} will help you {HACKER_ACTION}.",
     "To trade {TECH_RARE_ITEM} with {PEOPLE_SUBJECT}, you should visit {DESTINATION}.",
     "A session at {VILLAGE} will teach you all about {TECH_TRIVIA}.",
@@ -551,7 +551,9 @@ def fix_a_an(text):
         if words[i] == "a" or (i == 0 and words[i] == "A"):
             clean_next = words[i+1].lstrip("`\"'(")
             if clean_next and clean_next[0] in vowels:
-                words[i] = "An" if words[i] == "A" else "an"
+                first_word = clean_next.lower().strip(".,;:!?\"'()")
+                if not first_word.startswith("usb"):
+                    words[i] = "An" if words[i] == "A" else "an"
     return " ".join(words)
 
 COLLECTIVE_PREFIXES = [
@@ -1165,7 +1167,7 @@ def generate_fortune_metadata(seed_val):
                     if not next_w:
                         next_w = get_next_word(i + 1)
                         
-                    if next_w and next_w[0] in vowels:
+                    if next_w and next_w[0] in vowels and not next_w.lower().startswith("usb"):
                         parts[p_idx] = "An" if word == "A" else "an"
                         changed = True
             if changed:
