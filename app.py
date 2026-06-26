@@ -170,6 +170,7 @@ class FortuneTellerApp(app.App):
         self.selected_number = 0
         self.visible_numbers = []
         self.fortune_text = ""
+        self.path_seed = 0
         
         # Animation variables
         self.anim_time = 0.0
@@ -339,6 +340,7 @@ class FortuneTellerApp(app.App):
         daily_seed = make_daily_seed(uid, y, m, d)
         word_val = get_word_value(self.selected_color_name)
         path_seed = daily_seed + word_val + self.selected_number * 31
+        self.path_seed = path_seed
         self.fortune_text = generate_fortune(path_seed)
         
         self.state = "FOLDING_ANIMATION"
@@ -585,7 +587,12 @@ class FortuneTellerApp(app.App):
         # Tap to restart instruction
         ctx.rgb(0.6, 0.6, 0.6)
         ctx.font_size = FONT_SIZE_SUBTITLE
-        ctx.move_to(0, 85).text("Press any button to retry")
+        ctx.move_to(0, 80).text("Press any button to retry")
+        
+        # Display seed at the bottom
+        ctx.rgb(0.4, 0.4, 0.4)
+        ctx.font_size = 10
+        ctx.move_to(0, 98).text(f"Seed: {self.path_seed}")
         ctx.restore()
 
     def _wrap_text(self, text, ctx, max_width):
