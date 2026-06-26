@@ -373,9 +373,27 @@ def generate_fortune(seed_val):
                     context_before = result[max(0, idx - 20):idx]
                     choice = format_village(choice, context_before)
                 elif isinstance(choice, (list, tuple)):
+                    itype = choice[1]
+                    choice = format_item("", choice, rng, no_collective=no_coll)
+                    p_key = placeholder.strip("{}")
+                    plural_status[p_key] = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                else:
                     choice = format_item("", choice, rng, no_collective=no_coll)
                     
                 result = result.replace(placeholder, choice, 1)
+
+    for key, is_plural in plural_status.items():
+        plural_placeholder = "{" + key + "?"
+        while plural_placeholder in result:
+            idx = result.find(plural_placeholder)
+            end_idx = result.find("}", idx)
+            if end_idx == -1:
+                break
+            full_tag = result[idx:end_idx+1]
+            content = result[idx+len(plural_placeholder):end_idx]
+            parts = content.split("|")
+            verb = parts[0] if is_plural else parts[1] if len(parts) > 1 else parts[0]
+            result = result.replace(full_tag, verb, 1)
             
     if result:
         result = result[0].upper() + result[1:]
@@ -438,6 +456,8 @@ def generate_fortune_metadata(seed_val):
     replace_compound_placeholder("{TECH_SHINY_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "shiny")
     replace_compound_placeholder("{TECH_RARE_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "rare")
 
+    plural_status = {}
+    
     for key, values in TERMS.items():
         placeholders = []
         if key == "CREATURE_PLURAL":
@@ -471,6 +491,11 @@ def generate_fortune_metadata(seed_val):
                     context_before = full_text_before[max(0, len(full_text_before) - 20):]
                     choice = format_village(choice, context_before)
                 elif isinstance(choice, (list, tuple)):
+                    itype = choice[1]
+                    choice = format_item("", choice, rng, no_collective=no_coll)
+                    p_key = placeholder.strip("{}")
+                    plural_status[p_key] = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                else:
                     choice = format_item("", choice, rng, no_collective=no_coll)
                     
                 token_text = tokens[found_idx]["value"]
@@ -493,6 +518,24 @@ def generate_fortune_metadata(seed_val):
                     new_tokens.append({"type": "text", "value": right_text})
                     
                 tokens[found_idx:found_idx+1] = new_tokens
+
+    # Resolve verb conjugation placeholders on text tokens
+    for key, is_plural in plural_status.items():
+        plural_placeholder = "{" + key + "?"
+        for token in tokens:
+            if token["type"] == "text":
+                val = token["value"]
+                while plural_placeholder in val:
+                    idx = val.find(plural_placeholder)
+                    end_idx = val.find("}", idx)
+                    if end_idx == -1:
+                        break
+                    full_tag = val[idx:end_idx+1]
+                    content = val[idx+len(plural_placeholder):end_idx]
+                    parts = content.split("|")
+                    verb = parts[0] if is_plural else parts[1] if len(parts) > 1 else parts[0]
+                    val = val.replace(full_tag, verb, 1)
+                token["value"] = val
 
     if tokens and tokens[0]["value"]:
         val = tokens[0]["value"]
@@ -2396,6 +2439,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             const keys = ['MAP_LOCATION', 'VILLAGE', 'DESTINATION', ...Object.keys(config.TERMS).filter(k => k !== 'MAP_LOCATION' && k !== 'VILLAGE' && k !== 'DESTINATION')];
             
+            let pluralStatus = {};
+
             keys.forEach(key => {
                 let placeholders = [];
                 if (key === 'CREATURE_PLURAL') {
@@ -2424,11 +2469,30 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         if (key === 'VILLAGE' || (key === 'DESTINATION' && config.VILLAGES.includes(choice))) {
                             displayVal = formatVillageJS(choice);
                         } else if (Array.isArray(choice)) {
+                            const itype = choice[1];
                             displayVal = formatItemJS("", choice, rng, p.noColl);
+                            const pKey = p.name.replace(/[{}]/g, "");
+                            pluralStatus[pKey] = (itype === 'plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
                         }
                         result = result.replace(p.name, displayVal);
                     }
                 });
+            });
+
+            // Resolve verb conjugation placeholders like {PEOPLE_SUBJECT?mention|mentions}
+            Object.keys(pluralStatus).forEach(pKey => {
+                const isPlural = pluralStatus[pKey];
+                const pluralPlaceholder = "{" + pKey + "?";
+                while (result.includes(pluralPlaceholder)) {
+                    const idx = result.indexOf(pluralPlaceholder);
+                    const endIdx = result.indexOf("}", idx);
+                    if (endIdx === -1) break;
+                    const fullTag = result.substring(idx, endIdx + 1);
+                    const content = result.substring(idx + pluralPlaceholder.length, endIdx);
+                    const parts = content.split("|");
+                    const verb = isPlural ? parts[0] : (parts.length > 1 ? parts[1] : parts[0]);
+                    result = result.replace(fullTag, verb);
+                }
             });
             
             if (result) {

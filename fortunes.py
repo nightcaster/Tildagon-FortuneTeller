@@ -455,13 +455,13 @@ UPBEAT_TEMPLATES = [
     "Try {CAMP_ACTION_ACTIVE} at {DESTINATION}.",
     "Your code will finally compile after {VISIT_TYPE} {MAP_LOCATION}.",
     "{CREATURE_PLURAL_COLLECTIVE} riding {CREATURE_PLURAL} will bring great fortune to {VILLAGE}.",
-    "{PEOPLE_SUBJECT} will {CAMP_ACTION} .",
+    "{PEOPLE_SUBJECT_COLLECTIVE} will {CAMP_ACTION} .",
     "{VISIT_TYPE} {VILLAGE} will inspire you to {CAMP_ACTION}.",
     "You will discover {TECH_ADJECTIVE_ITEM} while trying to {HACKER_ACTION}.",
     "You will discover {CRAFT_ADJECTIVE_ITEM} while trying to {HACKER_ACTION}.",
     "Your {ACTIVE_DEVICE} will flawlessly {COMPUTE_VERB} {COMPUTE_TARGET}.",
     "While trying to {HACKER_ACTION} at {DESTINATION}, {ABSURD_OBJECT} will appear.",
-    "You will meet {PEOPLE_SUBJECT} who will help you {HACKER_ACTION}.",
+    "You will meet {PEOPLE_SUBJECT_COLLECTIVE} who will help you {HACKER_ACTION}.",
     "To {CAMP_ACTION}, you must first find {TECH_ADJECTIVE_ITEM}.",
     "To {CAMP_ACTION}, you must first obtain {CRAFT_ADJECTIVE_ITEM}.",
     "If you {CAMP_ACTION} {TIME}, you might find {TECH_ADJECTIVE_ITEM}.",
@@ -485,7 +485,7 @@ UPBEAT_TEMPLATES = [
     "Quick! You should be {CAMP_ACTION_ACTIVE}",
     "If you like {HARDWARE_TARGET}, check {CAMPING_LOCATION}.",
     "If {CREATURE_SUBJECT} makes eye contact, {HACKER_ACTION}.",
-    "If {PEOPLE_SUBJECT} mentions Jonty, change the topic.",
+    "If {PEOPLE_SUBJECT} {PEOPLE_SUBJECT?mention|mentions} Jonty, change the topic.",
     "If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.",
     "If you see {PEOPLE_SUBJECT}, compliment their outfit.",
     "If you see {HARDWARE_TARGET}, admire it from afar.",
@@ -628,27 +628,69 @@ def generate_fortune(seed_val):
         val = format_item("rare", item, rng)
         result = result.replace("{TECH_RARE_ITEM}", val, 1)
 
-    # Standard placeholders replacement
-    for key, values in TERMS.items():
-        placeholders = []
-        if key == "CREATURE_PLURAL":
-            placeholders = [("{CREATURE_PLURAL}", True), ("{CREATURE_PLURAL_COLLECTIVE}", False)]
-        elif key == "PEOPLE_SUBJECT":
-            placeholders = [("{PEOPLE_SUBJECT}", True), ("{PEOPLE_SUBJECT_COLLECTIVE}", False)]
-        else:
-            placeholders = [("{" + key + "}", False)]
+    active_plural = {}
+    i = 0
+    while True:
+        idx = result.find("{", i)
+        if idx == -1:
+            break
+        end_idx = result.find("}", idx)
+        if end_idx == -1:
+            break
             
-        for placeholder, no_coll in placeholders:
-            while placeholder in result:
+        tag = result[idx+1:end_idx]
+        
+        if "?" in tag:
+            # Helper tag
+            parts = tag.split("?")
+            key = parts[0]
+            options = parts[1].split("|")
+            is_plural = active_plural.get(key, False)
+            verb = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+            result = result[:idx] + verb + result[end_idx+1:]
+            i = idx + len(verb)
+        else:
+            # Standard placeholder
+            key = tag
+            no_coll = False
+            base_key = key
+            if key == "CREATURE_PLURAL":
+                no_coll = True
+            elif key == "CREATURE_PLURAL_COLLECTIVE":
+                no_coll = False
+                base_key = "CREATURE_PLURAL"
+            elif key == "PEOPLE_SUBJECT":
+                no_coll = True
+            elif key == "PEOPLE_SUBJECT_COLLECTIVE":
+                no_coll = False
+                base_key = "PEOPLE_SUBJECT"
+                
+            if base_key in TERMS:
+                choice = choose_unique(rng, TERMS[base_key], used_terms)
+                if isinstance(choice, (list, tuple)):
+                    itype = choice[1]
+                    choice = format_item("", choice, rng, no_collective=no_coll)
+                    is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                else:
+                    choice = format_item("", choice, rng, no_collective=no_coll)
+                    is_plural = False
+                
+                active_plural[base_key] = is_plural
+                active_plural[base_key + "_COLLECTIVE"] = is_plural
+                
+                result = result[:idx] + choice + result[end_idx+1:]
+                i = idx + len(choice)
+            elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
                 choice = choose_unique(rng, values, used_terms)
                 if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                    idx = result.find(placeholder)
                     context_before = result[max(0, idx - 20):idx]
                     choice = format_village(choice, context_before)
-                elif isinstance(choice, (list, tuple)):
-                    choice = format_item("", choice, rng, no_collective=no_coll)
-                    
-                result = result.replace(placeholder, choice, 1)
+                active_plural[key] = False
+                result = result[:idx] + choice + result[end_idx+1:]
+                i = idx + len(choice)
+            else:
+                i = end_idx + 1
             
     if result:
         result = result[0].upper() + result[1:]
@@ -711,52 +753,73 @@ def generate_fortune_metadata(seed_val):
     replace_compound_placeholder("{TECH_SHINY_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "shiny")
     replace_compound_placeholder("{TECH_RARE_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "rare")
 
-    for key, values in TERMS.items():
-        placeholders = []
-        if key == "CREATURE_PLURAL":
-            placeholders = [("{CREATURE_PLURAL}", True), ("{CREATURE_PLURAL_COLLECTIVE}", False)]
-        elif key == "PEOPLE_SUBJECT":
-            placeholders = [("{PEOPLE_SUBJECT}", True), ("{PEOPLE_SUBJECT_COLLECTIVE}", False)]
-        else:
-            placeholders = [("{" + key + "}", False)]
+    active_plural = {}
+    token_idx = 0
+    while token_idx < len(tokens):
+        token = tokens[token_idx]
+        if token["type"] != "text":
+            token_idx += 1
+            continue
             
-        for placeholder, no_coll in placeholders:
-            while True:
-                found_idx = -1
-                for idx, token in enumerate(tokens):
-                    if token["type"] == "text" and placeholder in token["value"]:
-                        found_idx = idx
-                        break
-                if found_idx == -1:
-                    break
-                    
-                choice = choose_unique(rng, values, used_terms)
-                raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+        val = token["value"]
+        idx = val.find("{")
+        if idx == -1:
+            token_idx += 1
+            continue
+            
+        end_idx = val.find("}", idx)
+        if end_idx == -1:
+            token_idx += 1
+            continue
+            
+        tag = val[idx+1:end_idx]
+        left_text = val[:idx]
+        right_text = val[end_idx+1:]
+        
+        if "?" in tag:
+            # Helper tag
+            parts = tag.split("?")
+            key = parts[0]
+            options = parts[1].split("|")
+            is_plural = active_plural.get(key, False)
+            verb = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+            token["value"] = left_text + verb + right_text
+        else:
+            # Standard placeholder
+            key = tag
+            no_coll = False
+            base_key = key
+            if key == "CREATURE_PLURAL":
+                no_coll = True
+            elif key == "CREATURE_PLURAL_COLLECTIVE":
+                no_coll = False
+                base_key = "CREATURE_PLURAL"
+            elif key == "PEOPLE_SUBJECT":
+                no_coll = True
+            elif key == "PEOPLE_SUBJECT_COLLECTIVE":
+                no_coll = False
+                base_key = "PEOPLE_SUBJECT"
                 
-                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                    full_text_before = ""
-                    for i in range(found_idx):
-                        full_text_before += tokens[i]["value"]
-                    token_text = tokens[found_idx]["value"]
-                    split_idx = token_text.find(placeholder)
-                    full_text_before += token_text[:split_idx]
-                    
-                    context_before = full_text_before[max(0, len(full_text_before) - 20):]
-                    choice = format_village(choice, context_before)
-                elif isinstance(choice, (list, tuple)):
+            if base_key in TERMS:
+                choice = choose_unique(rng, TERMS[base_key], used_terms)
+                raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+                if isinstance(choice, (list, tuple)):
+                    itype = choice[1]
                     choice = format_item("", choice, rng, no_collective=no_coll)
+                    is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                else:
+                    choice = format_item("", choice, rng, no_collective=no_coll)
+                    is_plural = False
                     
-                token_text = tokens[found_idx]["value"]
-                split_idx = token_text.find(placeholder)
-                left_text = token_text[:split_idx]
-                right_text = token_text[split_idx + len(placeholder):]
+                active_plural[base_key] = is_plural
+                active_plural[base_key + "_COLLECTIVE"] = is_plural
                 
                 new_tokens = []
                 if left_text:
                     new_tokens.append({"type": "text", "value": left_text})
                 new_tokens.append({
                     "type": "term",
-                    "key": key,
+                    "key": base_key,
                     "value": choice,
                     "raw_value": raw_choice,
                     "adj": "",
@@ -765,7 +828,33 @@ def generate_fortune_metadata(seed_val):
                 if right_text:
                     new_tokens.append({"type": "text", "value": right_text})
                     
-                tokens[found_idx:found_idx+1] = new_tokens
+                tokens[token_idx:token_idx+1] = new_tokens
+            elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
+                choice = choose_unique(rng, values, used_terms)
+                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                    full_text_before = "".join(t["value"] for t in tokens[:token_idx]) + left_text
+                    context_before = full_text_before[max(0, len(full_text_before) - 20):]
+                    choice = format_village(choice, context_before)
+                    
+                active_plural[key] = False
+                
+                new_tokens = []
+                if left_text:
+                    new_tokens.append({"type": "text", "value": left_text})
+                new_tokens.append({
+                    "type": "term",
+                    "key": key,
+                    "value": choice,
+                    "raw_value": choice,
+                    "adj": ""
+                })
+                if right_text:
+                    new_tokens.append({"type": "text", "value": right_text})
+                    
+                tokens[token_idx:token_idx+1] = new_tokens
+            else:
+                token_idx += 1
 
     if tokens and tokens[0]["value"]:
         val = tokens[0]["value"]
