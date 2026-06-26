@@ -244,7 +244,34 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
                 
                 f.write(f"UPBEAT_TEMPLATES = {json.dumps(upbeat_templates, indent=4)}\n\n")
                 f.write(f"OMINOUS_TEMPLATES = {json.dumps(ominous_templates, indent=4)}\n\n")
-                f.write("""COLLECTIVE_PREFIXES = [
+                f.write("""def format_village(name, context_before):
+    name_lower = name.lower().strip()
+    proper_noun_exceptions = {"milliways", "bodgeham-on-wye", "glastonledburyshire-on-severn", "sheffield-by-the-sea"}
+    if name_lower in proper_noun_exceptions:
+        return f'"{name}"'
+    self_descriptive_words = [
+        "hackspace", "hacklab", "makespace", "makerspace", "make space", "maker space",
+        "consulate", "embassy", "village", "sector", "camp", "lounge", "area", "house", 
+        "room", "hq", "lab", "division", "station", "centre", "center", "ville"
+    ]
+    if any(word in name_lower for word in self_descriptive_words):
+        return f'"{name}"'
+    collective_nouns = ["club", "armada", "commission", "society", "project", "team", "group", "network", "force", "consortium", "union", "association", "friends", "bods", "racers", "pals", "gamers", "makers", "biohackers"]
+    if any(name_lower.endswith(noun) for noun in collective_nouns):
+        return f'the "{name}" village'
+    return f'the village "{name}"'
+
+def fix_a_an(text):
+    vowels = "aeiouAEIOU"
+    words = text.split(" ")
+    for i in range(len(words) - 1):
+        if words[i] == "a" or (i == 0 and words[i] == "A"):
+            clean_next = words[i+1].lstrip("`\\\"'(")
+            if clean_next and clean_next[0] in vowels:
+                words[i] = "An" if words[i] == "A" else "an"
+    return " ".join(words)
+
+COLLECTIVE_PREFIXES = [
     "herd of",
     "gaggle of",
     "conference of",
@@ -256,7 +283,7 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
     "flock of"
 ]
 
-def format_item(adjective, item, rng=None):
+def format_item(adjective, item, rng=None, no_collective=False):
     if isinstance(item, (list, tuple)):
         name = item[0]
         itype = item[1]
@@ -266,8 +293,9 @@ def format_item(adjective, item, rng=None):
         itype = "countable"
         unit = None
 
-    if itype == "plural" and not unit and rng:
-        unit = rng.choice(COLLECTIVE_PREFIXES)
+    if itype == "plural" and not unit and rng and not no_collective:
+        if rng.next_int() % 2 == 0:
+            unit = rng.choice(COLLECTIVE_PREFIXES)
 
     if unit:
         if adjective:
@@ -284,6 +312,15 @@ def format_item(adjective, item, rng=None):
             return fix_a_an(f"a {phrase}")
         return phrase
 
+def choose_unique(rng, values, used_terms):
+    available = [v for v in values if (v[0] if isinstance(v, (list, tuple)) else v) not in used_terms]
+    if not available:
+        available = values
+    choice = rng.choice(available)
+    raw = choice[0] if isinstance(choice, (list, tuple)) else choice
+    used_terms.add(raw)
+    return choice
+
 def generate_fortune(seed_val):
     rng = SeededRandom(seed_val)
     
@@ -294,43 +331,51 @@ def generate_fortune(seed_val):
         template = rng.choice(OMINOUS_TEMPLATES)
         
     result = template
+    used_terms = set()
 
     # Resolve compound placeholders first
     while "{TECH_ADJECTIVE_ITEM}" in result:
-        adj = rng.choice(TERMS["TECH_ADJECTIVE"])
-        item = rng.choice(TERMS["TECH_ITEM"])
+        adj = choose_unique(rng, TERMS["TECH_ADJECTIVE"], used_terms)
+        item = choose_unique(rng, TERMS["TECH_ITEM"], used_terms)
         val = format_item(adj, item, rng)
         result = result.replace("{TECH_ADJECTIVE_ITEM}", val, 1)
 
     while "{CRAFT_ADJECTIVE_ITEM}" in result:
-        adj = rng.choice(TERMS["CRAFT_ADJECTIVE"])
-        item = rng.choice(TERMS["CRAFT_ITEM"])
+        adj = choose_unique(rng, TERMS["CRAFT_ADJECTIVE"], used_terms)
+        item = choose_unique(rng, TERMS["CRAFT_ITEM"], used_terms)
         val = format_item(adj, item, rng)
         result = result.replace("{CRAFT_ADJECTIVE_ITEM}", val, 1)
 
     while "{TECH_SHINY_ITEM}" in result:
-        item = rng.choice(TERMS["TECH_ITEM"])
+        item = choose_unique(rng, TERMS["TECH_ITEM"], used_terms)
         val = format_item("shiny", item, rng)
         result = result.replace("{TECH_SHINY_ITEM}", val, 1)
 
     while "{TECH_RARE_ITEM}" in result:
-        item = rng.choice(TERMS["TECH_ITEM"])
+        item = choose_unique(rng, TERMS["TECH_ITEM"], used_terms)
         val = format_item("rare", item, rng)
         result = result.replace("{TECH_RARE_ITEM}", val, 1)
 
-    # Standard placeholders replacement
     for key, values in TERMS.items():
-        placeholder = "{" + key + "}"
-        while placeholder in result:
-            choice = rng.choice(values)
-            if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                idx = result.find(placeholder)
-                context_before = result[max(0, idx - 20):idx]
-                choice = format_village(choice, context_before)
-            elif isinstance(choice, (list, tuple)):
-                choice = format_item("", choice, rng)
-                
-            result = result.replace(placeholder, choice, 1)
+        placeholders = []
+        if key == "CREATURE_PLURAL":
+            placeholders = [("{CREATURE_PLURAL}", True), ("{CREATURE_PLURAL_COLLECTIVE}", False)]
+        elif key == "PEOPLE_SUBJECT":
+            placeholders = [("{PEOPLE_SUBJECT}", True), ("{PEOPLE_SUBJECT_COLLECTIVE}", False)]
+        else:
+            placeholders = [("{" + key + "}", False)]
+            
+        for placeholder, no_coll in placeholders:
+            while placeholder in result:
+                choice = choose_unique(rng, values, used_terms)
+                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                    idx = result.find(placeholder)
+                    context_before = result[max(0, idx - 20):idx]
+                    choice = format_village(choice, context_before)
+                elif isinstance(choice, (list, tuple)):
+                    choice = format_item("", choice, rng, no_collective=no_coll)
+                    
+                result = result.replace(placeholder, choice, 1)
             
     if result:
         result = result[0].upper() + result[1:]
@@ -349,6 +394,7 @@ def generate_fortune_metadata(seed_val):
         vibe = "ominous"
         
     tokens = [{"type": "text", "value": template}]
+    used_terms = set()
 
     # Helper to resolve compound placeholders in tokens list
     def replace_compound_placeholder(placeholder, key_name, adj_source, item_source, fixed_adj=None):
@@ -361,8 +407,8 @@ def generate_fortune_metadata(seed_val):
             if found_idx == -1:
                 break
                 
-            adj = fixed_adj if fixed_adj is not None else rng.choice(adj_source)
-            item = rng.choice(item_source)
+            adj = fixed_adj if fixed_adj is not None else choose_unique(rng, adj_source, used_terms)
+            item = choose_unique(rng, item_source, used_terms)
             
             formatted_val = format_item(adj, item, rng)
             raw_val = item[0] if isinstance(item, (list, tuple)) else item
@@ -393,51 +439,60 @@ def generate_fortune_metadata(seed_val):
     replace_compound_placeholder("{TECH_RARE_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "rare")
 
     for key, values in TERMS.items():
-        placeholder = "{" + key + "}"
-        while True:
-            found_idx = -1
-            for idx, token in enumerate(tokens):
-                if token["type"] == "text" and placeholder in token["value"]:
-                    found_idx = idx
-                    break
-            if found_idx == -1:
-                break
-                
-            choice = rng.choice(values)
-            raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+        placeholders = []
+        if key == "CREATURE_PLURAL":
+            placeholders = [("{CREATURE_PLURAL}", True), ("{CREATURE_PLURAL_COLLECTIVE}", False)]
+        elif key == "PEOPLE_SUBJECT":
+            placeholders = [("{PEOPLE_SUBJECT}", True), ("{PEOPLE_SUBJECT_COLLECTIVE}", False)]
+        else:
+            placeholders = [("{" + key + "}", False)]
             
-            if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                full_text_before = ""
-                for i in range(found_idx):
-                    full_text_before += tokens[i]["value"]
+        for placeholder, no_coll in placeholders:
+            while True:
+                found_idx = -1
+                for idx, token in enumerate(tokens):
+                    if token["type"] == "text" and placeholder in token["value"]:
+                        found_idx = idx
+                        break
+                if found_idx == -1:
+                    break
+                    
+                choice = choose_unique(rng, values, used_terms)
+                raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+                
+                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                    full_text_before = ""
+                    for i in range(found_idx):
+                        full_text_before += tokens[i]["value"]
+                    token_text = tokens[found_idx]["value"]
+                    split_idx = token_text.find(placeholder)
+                    full_text_before += token_text[:split_idx]
+                    
+                    context_before = full_text_before[max(0, len(full_text_before) - 20):]
+                    choice = format_village(choice, context_before)
+                elif isinstance(choice, (list, tuple)):
+                    choice = format_item("", choice, rng, no_collective=no_coll)
+                    
                 token_text = tokens[found_idx]["value"]
                 split_idx = token_text.find(placeholder)
-                full_text_before += token_text[:split_idx]
+                left_text = token_text[:split_idx]
+                right_text = token_text[split_idx + len(placeholder):]
                 
-                context_before = full_text_before[max(0, len(full_text_before) - 20):]
-                choice = format_village(choice, context_before)
-            elif isinstance(choice, (list, tuple)):
-                choice = format_item("", choice, rng)
-                
-            token_text = tokens[found_idx]["value"]
-            split_idx = token_text.find(placeholder)
-            left_text = token_text[:split_idx]
-            right_text = token_text[split_idx + len(placeholder):]
-            
-            new_tokens = []
-            if left_text:
-                new_tokens.append({"type": "text", "value": left_text})
-            new_tokens.append({
-                "type": "term",
-                "key": key,
-                "value": choice,
-                "raw_value": raw_choice,
-                "adj": ""
-            })
-            if right_text:
-                new_tokens.append({"type": "text", "value": right_text})
-                
-            tokens[found_idx:found_idx+1] = new_tokens
+                new_tokens = []
+                if left_text:
+                    new_tokens.append({"type": "text", "value": left_text})
+                new_tokens.append({
+                    "type": "term",
+                    "key": key,
+                    "value": choice,
+                    "raw_value": raw_choice,
+                    "adj": "",
+                    "no_collective": no_coll
+                })
+                if right_text:
+                    new_tokens.append({"type": "text", "value": right_text})
+                    
+                tokens[found_idx:found_idx+1] = new_tokens
 
     if tokens and tokens[0]["value"]:
         val = tokens[0]["value"]
@@ -482,8 +537,19 @@ def generate_fortune_metadata(seed_val):
         "vibe": vibe,
         "tokens": tokens
     }
+
+def get_word_value(word):
+    total = 0
+    word = word.upper()
+    for idx, char in enumerate(word):
+        if 'A' <= char <= 'Z':
+            val = ord(char) - ord('A') + 1
+            if idx == len(word) - 1:
+                total += val * 26
+            else:
+                total += val
+    return total
 """)
-            
             importlib.reload(fortunes)
             
             self.send_response(200)
@@ -548,7 +614,8 @@ def generate_fortune_metadata(seed_val):
                 
             for number in visible_numbers:
                 # Same formula as app.py
-                path_seed = base_seed + color_idx * 17 + number * 31
+                word_val = fortunes.get_word_value(color_name)
+                path_seed = base_seed + word_val + number * 31
                 metadata = fortunes.generate_fortune_metadata(path_seed)
                 fortune_text = "".join(t["value"] for t in metadata["tokens"])
                 paths.append({
@@ -1741,9 +1808,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         let activeModalSource = '';
         let activeModalItemIdx = -1;
         let activeModalTokenIdx = -1;
-        let activeModalTemplate = '';
         let activeModalVibe = '';
         let activeModalTokens = [];
+        let activeModalNoCollective = false;
 
         // Elements
         const elSeedInput = document.getElementById('input-seed');
@@ -1908,8 +1975,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 const template = token.getAttribute('data-template');
                 const vibe = token.getAttribute('data-vibe');
                 const adj = token.getAttribute('data-adj') || '';
+                const noCollective = token.getAttribute('data-no-collective') === 'true';
                 
-                openTermModal(e, key, rawVal, source, itemIdx, tokenIdx, template, vibe, adj);
+                openTermModal(e, key, rawVal, source, itemIdx, tokenIdx, template, vibe, adj, noCollective);
             }
         });
 
@@ -2141,7 +2209,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     return escapeHtml(t.value);
                 } else {
                     const adjAttr = t.adj ? ` data-adj="${escapeHtml(t.adj)}"` : '';
-                    return `<span class="term-token term-key-${t.key}" data-key="${t.key}" data-raw="${escapeHtml(t.raw_value)}"${adjAttr} data-source="${source}" data-item-idx="${itemIdx}" data-token-idx="${tokenIdx}" data-template="${escapeHtml(template)}" data-vibe="${vibe}">${escapeHtml(t.value)}</span>`;
+                    const noCollAttr = t.no_collective ? ` data-no-collective="true"` : '';
+                    return `<span class="term-token term-key-${t.key}" data-key="${t.key}" data-raw="${escapeHtml(t.raw_value)}"${adjAttr}${noCollAttr} data-source="${source}" data-item-idx="${itemIdx}" data-token-idx="${tokenIdx}" data-template="${escapeHtml(template)}" data-vibe="${vibe}">${escapeHtml(t.value)}</span>`;
                 }
             }).join('');
         }
@@ -2272,7 +2341,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 }
             }
             nextInt() {
-                this.state = (this.state * 1103515245 + 12345) & 0x7FFFFFFF;
+                this.state = (Math.imul(this.state, 1103515245) + 12345) & 0x7FFFFFFF;
                 return this.state;
             }
             choice(lst) {
@@ -2281,24 +2350,85 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
         }
 
+        function chooseUniqueJS(rng, values, usedTerms) {
+            const available = values.filter(v => {
+                const raw = Array.isArray(v) ? v[0] : v;
+                return !usedTerms.has(raw);
+            });
+            const listToUse = available.length > 0 ? available : values;
+            const choice = rng.choice(listToUse);
+            const raw = Array.isArray(choice) ? choice[0] : choice;
+            usedTerms.add(raw);
+            return choice;
+        }
+
         function generateFortuneJS(template, stepSeed) {
             let rng = new SeededRandomJS(stepSeed);
             let result = template;
+            let usedTerms = new Set();
+
+            // Resolve compound placeholders first
+            while (result.includes("{TECH_ADJECTIVE_ITEM}")) {
+                const adj = chooseUniqueJS(rng, config.TERMS["TECH_ADJECTIVE"], usedTerms);
+                const item = chooseUniqueJS(rng, config.TERMS["TECH_ITEM"], usedTerms);
+                const val = formatItemJS(adj, item, rng);
+                result = result.replace("{TECH_ADJECTIVE_ITEM}", val);
+            }
+
+            while (result.includes("{CRAFT_ADJECTIVE_ITEM}")) {
+                const adj = chooseUniqueJS(rng, config.TERMS["CRAFT_ADJECTIVE"], usedTerms);
+                const item = chooseUniqueJS(rng, config.TERMS["CRAFT_ITEM"], usedTerms);
+                const val = formatItemJS(adj, item, rng);
+                result = result.replace("{CRAFT_ADJECTIVE_ITEM}", val);
+            }
+
+            while (result.includes("{TECH_SHINY_ITEM}")) {
+                const item = chooseUniqueJS(rng, config.TERMS["TECH_ITEM"], usedTerms);
+                const val = formatItemJS("shiny", item, rng);
+                result = result.replace("{TECH_SHINY_ITEM}", val);
+            }
+
+            while (result.includes("{TECH_RARE_ITEM}")) {
+                const item = chooseUniqueJS(rng, config.TERMS["TECH_ITEM"], usedTerms);
+                const val = formatItemJS("rare", item, rng);
+                result = result.replace("{TECH_RARE_ITEM}", val);
+            }
+
             const keys = ['MAP_LOCATION', 'VILLAGE', 'DESTINATION', ...Object.keys(config.TERMS).filter(k => k !== 'MAP_LOCATION' && k !== 'VILLAGE' && k !== 'DESTINATION')];
             
             keys.forEach(key => {
-                const placeholder = "{" + key + "}";
+                let placeholders = [];
+                if (key === 'CREATURE_PLURAL') {
+                    placeholders = [
+                        { name: '{CREATURE_PLURAL}', noColl: true },
+                        { name: '{CREATURE_PLURAL_COLLECTIVE}', noColl: false }
+                    ];
+                } else if (key === 'PEOPLE_SUBJECT') {
+                    placeholders = [
+                        { name: '{PEOPLE_SUBJECT}', noColl: true },
+                        { name: '{PEOPLE_SUBJECT_COLLECTIVE}', noColl: false }
+                    ];
+                } else {
+                    placeholders = [
+                        { name: '{' + key + '}', noColl: false }
+                    ];
+                }
+
                 const values = getOptionsListForKey(key);
                 if (!values || values.length === 0) return;
                 
-                while (result.includes(placeholder)) {
-                    const choice = rng.choice(values);
-                    let displayVal = choice;
-                    if (key === 'VILLAGE' || (key === 'DESTINATION' && config.VILLAGES.includes(choice))) {
-                        displayVal = formatVillageJS(choice);
+                placeholders.forEach(p => {
+                    while (result.includes(p.name)) {
+                        const choice = chooseUniqueJS(rng, values, usedTerms);
+                        let displayVal = choice;
+                        if (key === 'VILLAGE' || (key === 'DESTINATION' && config.VILLAGES.includes(choice))) {
+                            displayVal = formatVillageJS(choice);
+                        } else if (Array.isArray(choice)) {
+                            displayVal = formatItemJS("", choice, rng, p.noColl);
+                        }
+                        result = result.replace(p.name, displayVal);
                     }
-                    result = result.replace(placeholder, displayVal);
-                }
+                });
             });
             
             if (result) {
@@ -2473,7 +2603,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
 
         // Modal interactive actions
-        window.openTermModal = function(e, key, rawVal, source, itemIdx, tokenIdx, template, vibe, adj = '') {
+        window.openTermModal = function(e, key, rawVal, source, itemIdx, tokenIdx, template, vibe, adj = '', noCollective = false) {
             e.stopPropagation();
             activeModalKey = key;
             activeModalRawVal = rawVal;
@@ -2483,6 +2613,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             activeModalTokenIdx = tokenIdx;
             activeModalTemplate = template;
             activeModalVibe = vibe;
+            activeModalNoCollective = noCollective;
 
             if (source === 'paths') {
                 activeModalTokens = currentData.paths[itemIdx].tokens;
@@ -2621,7 +2752,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             "flock of"
         ];
 
-        function formatItemJS(adjective, item) {
+        function formatItemJS(adjective, item, rng, noCollective = false) {
             let name, itype, unit;
             if (Array.isArray(item)) {
                 name = item[0];
@@ -2633,9 +2764,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 unit = null;
             }
 
-            if (itype === "plural" && !unit) {
-                // For preview/JS rendering purposes, default to "gaggle of" if not specified
-                unit = "gaggle of";
+            if (itype === "plural" && !unit && !noCollective) {
+                if (rng) {
+                    if (rng.nextInt() % 2 === 0) {
+                        unit = rng.choice(COLLECTIVE_PREFIXES_JS);
+                    }
+                } else {
+                    unit = "gaggle of";
+                }
             }
 
             if (unit) {
@@ -2724,7 +2860,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                                 const unitVal = elTermModalUnitInput.value.trim();
                                 itemToFormat = unitVal ? [nameVal, typeVal, unitVal] : [nameVal, typeVal];
                             }
-                            displayVal = formatItemJS(currentAdj, itemToFormat);
+                            displayVal = formatItemJS(currentAdj, itemToFormat, null, (selectedCategory === 'CREATURE_PLURAL' || selectedCategory === 'PEOPLE_SUBJECT') && activeModalNoCollective);
                         }
                         return { type: 'term', value: displayVal };
                     }
@@ -3135,22 +3271,114 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             return matches;
         }
 
+        function getCategoryVariationsCount(list) {
+            let len = 0;
+            list.forEach(item => {
+                if (Array.isArray(item)) {
+                    const itype = item[1];
+                    const unit = item[2];
+                    if (itype === 'plural' && !unit) {
+                        len += 1 + COLLECTIVE_PREFIXES_JS.length; // 1 (no prefix) + 9 (prefixes) = 10
+                    } else {
+                        len += 1;
+                    }
+                } else {
+                    len += 1;
+                }
+            });
+            return len;
+        }
+
+        function getCategoryUniquePermutationsCount(list, M) {
+            if (M === 0) return 1;
+            const N = list.length;
+            if (M > N) {
+                let singleCount = 0;
+                list.forEach(item => {
+                    if (Array.isArray(item)) {
+                        const itype = item[1];
+                        const unit = item[2];
+                        if (itype === 'plural' && !unit) {
+                            singleCount += 1 + COLLECTIVE_PREFIXES_JS.length;
+                        } else {
+                            singleCount += 1;
+                        }
+                    } else {
+                        singleCount += 1;
+                    }
+                });
+                return Math.pow(singleCount, M);
+            }
+
+            const V = list.map(item => {
+                if (Array.isArray(item)) {
+                    const itype = item[1];
+                    const unit = item[2];
+                    if (itype === 'plural' && !unit) {
+                        return 1 + COLLECTIVE_PREFIXES_JS.length;
+                    } else {
+                        return 1;
+                    }
+                } else {
+                    return 1;
+                }
+            });
+
+            let dp = Array(M + 1).fill(0);
+            dp[0] = 1;
+            for (let i = 0; i < V.length; i++) {
+                const val = V[i];
+                for (let j = M; j >= 1; j--) {
+                    dp[j] = dp[j] + dp[j - 1] * val;
+                }
+            }
+
+            let fact = 1;
+            for (let i = 1; i <= M; i++) {
+                fact *= i;
+            }
+            return dp[M] * fact;
+        }
+
         function getTemplatePermutationsCount(template, placeholders) {
             if (placeholders.length === 0) return 1;
-            let count = 1;
+
+            const counts = {};
             placeholders.forEach(ph => {
-                let len = 0;
-                if (ph === 'MAP_LOCATION') len = config.MAP_LOCATIONS.length;
-                else if (ph === 'VILLAGE') len = config.VILLAGES.length;
-                else if (ph === 'DESTINATION') len = config.MAP_LOCATIONS.length + config.VILLAGES.length;
-                else if (ph === 'TECH_ADJECTIVE_ITEM') len = (config.TERMS['TECH_ADJECTIVE'] || []).length * (config.TERMS['TECH_ITEM'] || []).length;
-                else if (ph === 'CRAFT_ADJECTIVE_ITEM') len = (config.TERMS['CRAFT_ADJECTIVE'] || []).length * (config.TERMS['CRAFT_ITEM'] || []).length;
-                else if (ph === 'TECH_SHINY_ITEM') len = (config.TERMS['TECH_ITEM'] || []).length;
-                else if (ph === 'TECH_RARE_ITEM') len = (config.TERMS['TECH_ITEM'] || []).length;
-                else len = (config.TERMS[ph] || []).length;
-                count *= len;
+                counts[ph] = (counts[ph] || 0) + 1;
             });
-            return count;
+
+            let totalCount = 1;
+
+            for (const ph in counts) {
+                const M = counts[ph];
+                let list = [];
+                if (ph === 'MAP_LOCATION') {
+                    list = Array(config.MAP_LOCATIONS.length).fill(1);
+                } else if (ph === 'VILLAGE') {
+                    list = Array(config.VILLAGES.length).fill(1);
+                } else if (ph === 'DESTINATION') {
+                    list = Array(config.MAP_LOCATIONS.length + config.VILLAGES.length).fill(1);
+                } else if (ph === 'TECH_ADJECTIVE_ITEM') {
+                    const len = (config.TERMS['TECH_ADJECTIVE'] || []).length * getCategoryVariationsCount(config.TERMS['TECH_ITEM'] || []);
+                    list = Array(len).fill(1);
+                } else if (ph === 'CRAFT_ADJECTIVE_ITEM') {
+                    const len = (config.TERMS['CRAFT_ADJECTIVE'] || []).length * getCategoryVariationsCount(config.TERMS['CRAFT_ITEM'] || []);
+                    list = Array(len).fill(1);
+                } else if (ph === 'TECH_SHINY_ITEM') {
+                    const len = getCategoryVariationsCount(config.TERMS['TECH_ITEM'] || []);
+                    list = Array(len).fill(1);
+                } else if (ph === 'TECH_RARE_ITEM') {
+                    const len = getCategoryVariationsCount(config.TERMS['TECH_ITEM'] || []);
+                    list = Array(len).fill(1);
+                } else {
+                    list = config.TERMS[ph] || [];
+                }
+
+                totalCount *= getCategoryUniquePermutationsCount(list, M);
+            }
+
+            return totalCount;
         }
 
         function formatVillageJS(name) {

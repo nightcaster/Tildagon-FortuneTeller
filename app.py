@@ -150,7 +150,7 @@ def make_daily_seed(badge_id, year, month, day):
     h = ((h << 5) + h) + day
     return h & 0x7FFFFFFF
 
-from .fortunes import generate_fortune
+from .fortunes import generate_fortune, get_word_value
 
 class FortuneTellerApp(app.App):
     def __init__(self):
@@ -337,7 +337,8 @@ class FortuneTellerApp(app.App):
         uid = get_unique_id()
         y, m, d = get_current_date()
         daily_seed = make_daily_seed(uid, y, m, d)
-        path_seed = daily_seed + self.selected_color_idx * 17 + self.selected_number * 31
+        word_val = get_word_value(self.selected_color_name)
+        path_seed = daily_seed + word_val + self.selected_number * 31
         self.fortune_text = generate_fortune(path_seed)
         
         self.state = "FOLDING_ANIMATION"

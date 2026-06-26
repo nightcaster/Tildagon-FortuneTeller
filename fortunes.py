@@ -157,16 +157,23 @@ TERMS = {
     "DESTINATION": MAP_LOCATIONS + VILLAGES,
     "PEOPLE_SUBJECT": [
         ("friend", "countable"),
+        ("friends", "plural"),
         ("volunteer", "countable"),
+        ("volunteers", "plural"),
         ("furry", "countable"),
+        ("furries", "plural"),
         ("hacker", "countable"),
         ("hackers", "plural"),
+        ("hardware wizard", "countable"),
         ("hardware wizards", "plural"),
         ("duck", "countable"),
+        ("ducks", "plural"),
         ("event sponsor", "countable"),
+        ("event sponsors", "plural"),
         ("Null Sector DJ", "countable"),
+        ("Null Sector DJs", "plural"),
         ("event organizer", "countable"),
-        ("hardware wizard", "countable"),
+        ("event organizers", "plural"),
     ],
     "CREATURE_SUBJECT": [
         ("robot", "countable"),
@@ -174,14 +181,16 @@ TERMS = {
         ("duck", "countable"),
         ("spiders", "plural"),
         ("spider wearing a tiny high-vis vest", "countable"),
+        ("spiders wearing tiny high-vis vests", "plural"),
     ],
     "CREATURE_PLURAL": [
-        "Ducks",
-        "Spiders",
-        "GPS rave bots",
-        "Hexpansions",
-        "Volunteers",
-        "Rouge deer",
+        ("ducks", "plural"),
+        ("spiders", "plural"),
+        ("spiders wearing tiny high-vis vests", "plural"),
+        ("GPS rave bots", "plural"),
+        ("hexpansions", "plural"),
+        ("volunteers", "plural"),
+        ("rogue deer", "plural"),
     ],
     "COMPUTE_VERB": [
         "debug",
@@ -414,13 +423,38 @@ TERMS = {
         "a visit to",
         "a few drinks at",
     ],
+    "CAMPING_ITEM": [
+        ("your socks", "mass"),
+        ("your sleeping bag", "mass"),
+        ("your airbed", "mass"),
+        ("your tent", "mass"),
+        ("your camping chair", "mass"),
+        ("your backpack", "mass"),
+    ],
+    "CAMPING_LOCATION": [
+        ("inside your socks", "mass"),
+        ("in the depth of your sleeping bag", "mass"),
+        ("in the bowels of your tent", "mass"),
+        ("in the queue for the showers", "mass"),
+        ("in the toilets", "mass"),
+        ("in the bar", "mass"),
+        ("in the info tent", "mass"),
+    ],
+    "FESTIVAL_INFRASTRUCTURE": [
+        ("the DECT phone system", "mass"),
+        ("the fibre backbone", "mass"),
+        ("stuck telehandler", "countable"),
+        ("stuck van", "countable"),
+        ("the Wi-Fi infrastructure", "mass"),
+        ("a soiled Datenklo", "mass"),
+    ],
 }
 
 UPBEAT_TEMPLATES = [
     "{PEOPLE_SUBJECT} will {SOCIAL_VERB} {CREATURE_SUBJECT}.",
     "Try {CAMP_ACTION_ACTIVE} at {DESTINATION}.",
     "Your code will finally compile after {VISIT_TYPE} {MAP_LOCATION}.",
-    "{CREATURE_PLURAL} riding {CREATURE_PLURAL} will bring great fortune to {VILLAGE}.",
+    "{CREATURE_PLURAL_COLLECTIVE} riding {CREATURE_PLURAL} will bring great fortune to {VILLAGE}.",
     "{PEOPLE_SUBJECT} will {CAMP_ACTION} .",
     "{VISIT_TYPE} {VILLAGE} will inspire you to {CAMP_ACTION}.",
     "You will discover {TECH_ADJECTIVE_ITEM} while trying to {HACKER_ACTION}.",
@@ -444,11 +478,19 @@ UPBEAT_TEMPLATES = [
     "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {TECH_ADJECTIVE_ITEM}.",
     "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {CRAFT_ADJECTIVE_ITEM}.",
     "A mysterious friendly signal at {DESTINATION} suggests you should immediately {CAMP_ACTION}.",
-    "You will spot Jonty successfully routing BGP traffic using nothing but {CREATURE_PLURAL}.",
+    "You will spot Jonty fixing {FESTIVAL_INFRASTRUCTURE} using {CREATURE_PLURAL_COLLECTIVE}.",
     "A mysterious firmware update signed by Jonty will grant your {ACTIVE_DEVICE} {SPECIAL_DEVICE_FEATURE}.",
     "A ping on port 8081 {TIME} signals incoming {CREATURE_PLURAL}",
     "Be on the lookout for {HARDWARE_TARGET} to {HARDWARE_VERB}",
-    "Quick! You should be {CAMP_ACTION_ACTIVE}"
+    "Quick! You should be {CAMP_ACTION_ACTIVE}",
+    "If you like {HARDWARE_TARGET}, check {CAMPING_LOCATION}.",
+    "If {CREATURE_SUBJECT} makes eye contact, {HACKER_ACTION}.",
+    "If {PEOPLE_SUBJECT} mentions Jonty, change the topic.",
+    "If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.",
+    "If you see {PEOPLE_SUBJECT}, compliment their outfit.",
+    "If you see {HARDWARE_TARGET}, admire it from afar.",
+    "You will find fame and fortune {CAMPING_LOCATION}.",
+    "The {CREATURE_PLURAL} are not what they seem..."
 ]
 
 OMINOUS_TEMPLATES = [
@@ -467,8 +509,8 @@ OMINOUS_TEMPLATES = [
     "Beware of {CREATURE_SUBJECT} trying to {COMPUTE_VERB} your unprotected {ACTIVE_DEVICE}.",
     "Beware of {CREATURE_SUBJECT} trying to {HARDWARE_VERB} your unguarded {ACTIVE_DEVICE}.",
     "If you see {HAZARD} creeping around {DESTINATION}, take shelter at {MAP_LOCATION}.",
-    "If you see Jonty sprinting toward {DESTINATION}, do not ask questions. Follow him.",
-    "Jonty will challenge you to a lockpicking duel behind the {MAP_LOCATION}. Bring your own tension wrench.",
+    "If you see Jonty sprinting toward {DESTINATION}, do not ask questions. Do not follow him.",
+    "Jonty will challenge you to a game of chance behind {MAP_LOCATION}.",
     "Beware of {HAZARD} when compiling code for {ACTIVE_DEVICE}.",
     "{PEOPLE_SUBJECT} will {CAMP_ACTION} despite being advised not to.",
     "Your {ACTIVE_DEVICE} will slowly begin to resent you for not {CAMP_ACTION_ACTIVE}"
@@ -513,7 +555,7 @@ COLLECTIVE_PREFIXES = [
     "flock of"
 ]
 
-def format_item(adjective, item, rng=None):
+def format_item(adjective, item, rng=None, no_collective=False):
     if isinstance(item, (list, tuple)):
         name = item[0]
         itype = item[1]
@@ -523,8 +565,9 @@ def format_item(adjective, item, rng=None):
         itype = "countable"
         unit = None
 
-    if itype == "plural" and not unit and rng:
-        unit = rng.choice(COLLECTIVE_PREFIXES)
+    if itype == "plural" and not unit and rng and not no_collective:
+        if rng.next_int() % 2 == 0:
+            unit = rng.choice(COLLECTIVE_PREFIXES)
 
     if unit:
         if adjective:
@@ -541,6 +584,15 @@ def format_item(adjective, item, rng=None):
             return fix_a_an(f"a {phrase}")
         return phrase
 
+def choose_unique(rng, values, used_terms):
+    available = [v for v in values if (v[0] if isinstance(v, (list, tuple)) else v) not in used_terms]
+    if not available:
+        available = values
+    choice = rng.choice(available)
+    raw = choice[0] if isinstance(choice, (list, tuple)) else choice
+    used_terms.add(raw)
+    return choice
+
 def generate_fortune(seed_val):
     rng = SeededRandom(seed_val)
     
@@ -551,43 +603,52 @@ def generate_fortune(seed_val):
         template = rng.choice(OMINOUS_TEMPLATES)
         
     result = template
+    used_terms = set()
 
     # Resolve compound placeholders first
     while "{TECH_ADJECTIVE_ITEM}" in result:
-        adj = rng.choice(TERMS["TECH_ADJECTIVE"])
-        item = rng.choice(TERMS["TECH_ITEM"])
+        adj = choose_unique(rng, TERMS["TECH_ADJECTIVE"], used_terms)
+        item = choose_unique(rng, TERMS["TECH_ITEM"], used_terms)
         val = format_item(adj, item, rng)
         result = result.replace("{TECH_ADJECTIVE_ITEM}", val, 1)
 
     while "{CRAFT_ADJECTIVE_ITEM}" in result:
-        adj = rng.choice(TERMS["CRAFT_ADJECTIVE"])
-        item = rng.choice(TERMS["CRAFT_ITEM"])
+        adj = choose_unique(rng, TERMS["CRAFT_ADJECTIVE"], used_terms)
+        item = choose_unique(rng, TERMS["CRAFT_ITEM"], used_terms)
         val = format_item(adj, item, rng)
         result = result.replace("{CRAFT_ADJECTIVE_ITEM}", val, 1)
 
     while "{TECH_SHINY_ITEM}" in result:
-        item = rng.choice(TERMS["TECH_ITEM"])
+        item = choose_unique(rng, TERMS["TECH_ITEM"], used_terms)
         val = format_item("shiny", item, rng)
         result = result.replace("{TECH_SHINY_ITEM}", val, 1)
 
     while "{TECH_RARE_ITEM}" in result:
-        item = rng.choice(TERMS["TECH_ITEM"])
+        item = choose_unique(rng, TERMS["TECH_ITEM"], used_terms)
         val = format_item("rare", item, rng)
         result = result.replace("{TECH_RARE_ITEM}", val, 1)
 
     # Standard placeholders replacement
     for key, values in TERMS.items():
-        placeholder = "{" + key + "}"
-        while placeholder in result:
-            choice = rng.choice(values)
-            if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                idx = result.find(placeholder)
-                context_before = result[max(0, idx - 20):idx]
-                choice = format_village(choice, context_before)
-            elif isinstance(choice, (list, tuple)):
-                choice = format_item("", choice, rng)
-                
-            result = result.replace(placeholder, choice, 1)
+        placeholders = []
+        if key == "CREATURE_PLURAL":
+            placeholders = [("{CREATURE_PLURAL}", True), ("{CREATURE_PLURAL_COLLECTIVE}", False)]
+        elif key == "PEOPLE_SUBJECT":
+            placeholders = [("{PEOPLE_SUBJECT}", True), ("{PEOPLE_SUBJECT_COLLECTIVE}", False)]
+        else:
+            placeholders = [("{" + key + "}", False)]
+            
+        for placeholder, no_coll in placeholders:
+            while placeholder in result:
+                choice = choose_unique(rng, values, used_terms)
+                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                    idx = result.find(placeholder)
+                    context_before = result[max(0, idx - 20):idx]
+                    choice = format_village(choice, context_before)
+                elif isinstance(choice, (list, tuple)):
+                    choice = format_item("", choice, rng, no_collective=no_coll)
+                    
+                result = result.replace(placeholder, choice, 1)
             
     if result:
         result = result[0].upper() + result[1:]
@@ -606,6 +667,7 @@ def generate_fortune_metadata(seed_val):
         vibe = "ominous"
         
     tokens = [{"type": "text", "value": template}]
+    used_terms = set()
 
     # Helper to resolve compound placeholders in tokens list
     def replace_compound_placeholder(placeholder, key_name, adj_source, item_source, fixed_adj=None):
@@ -618,8 +680,8 @@ def generate_fortune_metadata(seed_val):
             if found_idx == -1:
                 break
                 
-            adj = fixed_adj if fixed_adj is not None else rng.choice(adj_source)
-            item = rng.choice(item_source)
+            adj = fixed_adj if fixed_adj is not None else choose_unique(rng, adj_source, used_terms)
+            item = choose_unique(rng, item_source, used_terms)
             
             formatted_val = format_item(adj, item, rng)
             raw_val = item[0] if isinstance(item, (list, tuple)) else item
@@ -650,51 +712,60 @@ def generate_fortune_metadata(seed_val):
     replace_compound_placeholder("{TECH_RARE_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "rare")
 
     for key, values in TERMS.items():
-        placeholder = "{" + key + "}"
-        while True:
-            found_idx = -1
-            for idx, token in enumerate(tokens):
-                if token["type"] == "text" and placeholder in token["value"]:
-                    found_idx = idx
-                    break
-            if found_idx == -1:
-                break
-                
-            choice = rng.choice(values)
-            raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+        placeholders = []
+        if key == "CREATURE_PLURAL":
+            placeholders = [("{CREATURE_PLURAL}", True), ("{CREATURE_PLURAL_COLLECTIVE}", False)]
+        elif key == "PEOPLE_SUBJECT":
+            placeholders = [("{PEOPLE_SUBJECT}", True), ("{PEOPLE_SUBJECT_COLLECTIVE}", False)]
+        else:
+            placeholders = [("{" + key + "}", False)]
             
-            if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                full_text_before = ""
-                for i in range(found_idx):
-                    full_text_before += tokens[i]["value"]
+        for placeholder, no_coll in placeholders:
+            while True:
+                found_idx = -1
+                for idx, token in enumerate(tokens):
+                    if token["type"] == "text" and placeholder in token["value"]:
+                        found_idx = idx
+                        break
+                if found_idx == -1:
+                    break
+                    
+                choice = choose_unique(rng, values, used_terms)
+                raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+                
+                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                    full_text_before = ""
+                    for i in range(found_idx):
+                        full_text_before += tokens[i]["value"]
+                    token_text = tokens[found_idx]["value"]
+                    split_idx = token_text.find(placeholder)
+                    full_text_before += token_text[:split_idx]
+                    
+                    context_before = full_text_before[max(0, len(full_text_before) - 20):]
+                    choice = format_village(choice, context_before)
+                elif isinstance(choice, (list, tuple)):
+                    choice = format_item("", choice, rng, no_collective=no_coll)
+                    
                 token_text = tokens[found_idx]["value"]
                 split_idx = token_text.find(placeholder)
-                full_text_before += token_text[:split_idx]
+                left_text = token_text[:split_idx]
+                right_text = token_text[split_idx + len(placeholder):]
                 
-                context_before = full_text_before[max(0, len(full_text_before) - 20):]
-                choice = format_village(choice, context_before)
-            elif isinstance(choice, (list, tuple)):
-                choice = format_item("", choice, rng)
-                
-            token_text = tokens[found_idx]["value"]
-            split_idx = token_text.find(placeholder)
-            left_text = token_text[:split_idx]
-            right_text = token_text[split_idx + len(placeholder):]
-            
-            new_tokens = []
-            if left_text:
-                new_tokens.append({"type": "text", "value": left_text})
-            new_tokens.append({
-                "type": "term",
-                "key": key,
-                "value": choice,
-                "raw_value": raw_choice,
-                "adj": ""
-            })
-            if right_text:
-                new_tokens.append({"type": "text", "value": right_text})
-                
-            tokens[found_idx:found_idx+1] = new_tokens
+                new_tokens = []
+                if left_text:
+                    new_tokens.append({"type": "text", "value": left_text})
+                new_tokens.append({
+                    "type": "term",
+                    "key": key,
+                    "value": choice,
+                    "raw_value": raw_choice,
+                    "adj": "",
+                    "no_collective": no_coll
+                })
+                if right_text:
+                    new_tokens.append({"type": "text", "value": right_text})
+                    
+                tokens[found_idx:found_idx+1] = new_tokens
 
     if tokens and tokens[0]["value"]:
         val = tokens[0]["value"]
@@ -739,3 +810,15 @@ def generate_fortune_metadata(seed_val):
         "vibe": vibe,
         "tokens": tokens
     }
+
+def get_word_value(word):
+    total = 0
+    word = word.upper()
+    for idx, char in enumerate(word):
+        if 'A' <= char <= 'Z':
+            val = ord(char) - ord('A') + 1
+            if idx == len(word) - 1:
+                total += val * 26
+            else:
+                total += val
+    return total
