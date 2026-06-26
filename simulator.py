@@ -244,7 +244,7 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
                 
                 f.write(f"UPBEAT_TEMPLATES = {json.dumps(upbeat_templates, indent=4)}\n\n")
                 f.write(f"OMINOUS_TEMPLATES = {json.dumps(ominous_templates, indent=4)}\n\n")
-                f.write("""def format_village(name, context_before):
+                f.write(r"""def format_village(name, context_before):
     name_lower = name.lower().strip()
     proper_noun_exceptions = {"milliways", "bodgeham-on-wye", "glastonledburyshire-on-severn", "sheffield-by-the-sea"}
     if name_lower in proper_noun_exceptions:
@@ -280,10 +280,11 @@ COLLECTIVE_PREFIXES = [
     "tsunami of",
     "mob of",
     "cabal of",
-    "flock of"
+    "flock of",
+    "some"
 ]
 
-def format_item(adjective, item, rng=None, no_collective=False):
+def format_item(adjective, item, rng=None, add_collective=False):
     if isinstance(item, (list, tuple)):
         name = item[0]
         itype = item[1]
@@ -293,8 +294,8 @@ def format_item(adjective, item, rng=None, no_collective=False):
         itype = "countable"
         unit = None
 
-    if itype == "plural" and not unit and rng and not no_collective:
-        if rng.next_int() % 2 == 0:
+    if itype == "plural" and not unit and rng and add_collective:
+        if (rng.next_int() >> 8) % 2 == 0:
             unit = rng.choice(COLLECTIVE_PREFIXES)
 
     if unit:
@@ -311,6 +312,94 @@ def format_item(adjective, item, rng=None, no_collective=False):
         if itype == "countable":
             return fix_a_an(f"a {phrase}")
         return phrase
+
+def _resolve_key(key):
+    '''
+    Strip _PLURAL and/or _COLLECTIVE suffixes from a template placeholder key.
+    Returns (base_key, plural_only, add_collective).
+
+    add_collective=True  -> collective noun prefix may be randomly added (e.g. "a herd of")
+    add_collective=False -> plain form, no collective prefix
+    plural_only=True     -> filter TERMS list to only 'plural' typed entries
+
+    Examples:
+      "CREATURE"                   -> ("CREATURE", False, False)
+    '''
+    add_collective = False
+    plural_only = False
+    if key.endswith("_COLLECTIVE"):
+        key = key[:-len("_COLLECTIVE")]
+        add_collective = True
+    if key.endswith("_PLURAL"):
+        key = key[:-len("_PLURAL")]
+        plural_only = True
+    return key, plural_only, add_collective
+
+def is_preceded_by_modal(text, index):
+    preceding = text[:index].rstrip()
+    if not preceding:
+        return False
+    words = preceding.split()
+    if not words:
+        return False
+    last_word = words[-1].lower().strip(".,;:!?\"'()")
+    return last_word in {"will", "would", "shall", "should", "can", "could", "may", "might", "must", "to"}
+
+# Noun-type markers recognised in TERMS tuple entries
+_NOUN_TYPES = ("countable", "plural", "mass")
+
+def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=False):
+    parts = chain_key.split("+")
+    output_parts = []
+    subject_is_plural = None
+    pending_adjective = None
+
+    for part in parts:
+        base_key, plural_only, add_coll = _resolve_key(part)
+
+        if base_key not in TERMS:
+            continue
+
+        pool = TERMS[base_key]
+        if plural_only:
+            pool = [e for e in pool if isinstance(e, tuple) and e[1] == "plural"]
+
+        choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+
+        if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+            # Noun — format with article / collective prefix, apply pending adjective
+            adj = pending_adjective or ""
+            formatted = format_item(adj, choice, rng, add_collective=add_coll)
+            is_pl = (choice[1] == "plural" and not formatted.lower().startswith(("a ", "an ")))
+            if subject_is_plural is None:
+                subject_is_plural = is_pl
+                active_plural[base_key] = is_pl
+                active_plural[base_key + "_COLLECTIVE"] = is_pl
+            
+            if pending_adjective is not None and len(output_parts) > 0 and output_parts[-1] == pending_adjective:
+                output_parts[-1] = formatted
+            else:
+                output_parts.append(formatted)
+            pending_adjective = None
+        elif isinstance(choice, tuple):
+            # Verb pair — pick form based on subject plurality or active_plural fallback
+            if force_infinitive:
+                is_pl = True
+            elif subject_is_plural is not None:
+                is_pl = subject_is_plural
+            elif active_plural:
+                is_pl = list(active_plural.values())[-1]
+            else:
+                is_pl = True
+            output_parts.append(choice[0] if is_pl else choice[1])
+            pending_adjective = None
+        else:
+            # Plain string (adverb / adjective) — use as-is
+            output_parts.append(choice)
+            pending_adjective = choice
+
+    is_plural = subject_is_plural if subject_is_plural is not None else (list(active_plural.values())[-1] if active_plural else True)
+    return " ".join(output_parts), is_plural
 
 def choose_unique(rng, values, used_terms):
     available = [v for v in values if (v[0] if isinstance(v, (list, tuple)) else v) not in used_terms]
@@ -356,49 +445,134 @@ def generate_fortune(seed_val):
         val = format_item("rare", item, rng)
         result = result.replace("{TECH_RARE_ITEM}", val, 1)
 
-    for key, values in TERMS.items():
-        placeholders = []
-        if key == "CREATURE_PLURAL":
-            placeholders = [("{CREATURE_PLURAL}", True), ("{CREATURE_PLURAL_COLLECTIVE}", False)]
-        elif key == "PEOPLE_SUBJECT":
-            placeholders = [("{PEOPLE_SUBJECT}", True), ("{PEOPLE_SUBJECT_COLLECTIVE}", False)]
-        else:
-            placeholders = [("{" + key + "}", False)]
-            
-        for placeholder, no_coll in placeholders:
-            while placeholder in result:
-                choice = choose_unique(rng, values, used_terms)
-                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                    idx = result.find(placeholder)
-                    context_before = result[max(0, idx - 20):idx]
-                    choice = format_village(choice, context_before)
-                elif isinstance(choice, (list, tuple)):
-                    itype = choice[1]
-                    choice = format_item("", choice, rng, no_collective=no_coll)
-                    p_key = placeholder.strip("{}")
-                    plural_status[p_key] = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
-                else:
-                    choice = format_item("", choice, rng, no_collective=no_coll)
-                    
-                result = result.replace(placeholder, choice, 1)
+    active_plural = {}
+    i = 0
+    while True:
+        idx = result.find("{", i)
+        if idx == -1:
+            break
+        end_idx = result.find("}", idx)
+        if end_idx == -1:
+            break
 
-    for key, is_plural in plural_status.items():
-        plural_placeholder = "{" + key + "?"
-        while plural_placeholder in result:
-            idx = result.find(plural_placeholder)
-            end_idx = result.find("}", idx)
-            if end_idx == -1:
-                break
-            full_tag = result[idx:end_idx+1]
-            content = result[idx+len(plural_placeholder):end_idx]
-            parts = content.split("|")
-            verb = parts[0] if is_plural else parts[1] if len(parts) > 1 else parts[0]
-            result = result.replace(full_tag, verb, 1)
-            
+        tag = result[idx+1:end_idx]
+
+        if "?" in tag:
+            parts = tag.split("?")
+            key = parts[0]
+            options = parts[1].split("|")
+
+            if "+" in key:
+                # Chain with conditional suffix: e.g. "{PEOPLE_SUBJECT+SOCIAL_VERB?themselves|themself}"
+                force_inf = is_preceded_by_modal(result, idx)
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
+            else:
+                base_key, plural_only, add_coll = _resolve_key(key)
+
+                if base_key in TERMS:
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+                        itype = choice[1]
+                        choice = format_item("", choice, rng, add_collective=add_coll)
+                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                    elif isinstance(choice, tuple):
+                        force_inf = is_preceded_by_modal(result, idx)
+                        if force_inf:
+                            choice = choice[0]
+                        elif active_plural:
+                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        else:
+                            choice = choice[0]
+                        is_plural = False
+                    else:
+                        is_plural = False  # plain string: use as-is
+
+                    active_plural[base_key] = is_plural
+                    active_plural[base_key + "_COLLECTIVE"] = is_plural
+                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
+                    choice = choose_unique(rng, values, used_terms)
+                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                        context_before = result[max(0, idx - 20):idx]
+                        choice = format_village(choice, context_before)
+                    is_plural = False
+                    active_plural[key] = is_plural
+                else:
+                    # Reference to a previously resolved key's plurality
+                    is_plural = active_plural.get(key, False)
+                    verb = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+                    result = result[:idx] + verb + result[end_idx+1:]
+                    i = idx + len(verb)
+                    continue
+
+            suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+            if suffix and suffix[0].isalnum():
+                val = choice + " " + suffix
+            else:
+                val = choice + suffix
+            result = result[:idx] + val + result[end_idx+1:]
+            i = idx + len(val)
+        else:
+            # Standard placeholder
+            key = tag
+
+            if "+" in key:
+                # Chain: e.g. "{PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB}"
+                force_inf = is_preceded_by_modal(result, idx)
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
+                result = result[:idx] + choice + result[end_idx+1:]
+                i = idx + len(choice)
+            else:
+                base_key, plural_only, add_coll = _resolve_key(key)
+
+                if base_key in TERMS:
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+                        itype = choice[1]
+                        choice = format_item("", choice, rng, add_collective=add_coll)
+                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                    elif isinstance(choice, tuple):
+                        force_inf = is_preceded_by_modal(result, idx)
+                        if force_inf:
+                            choice = choice[0]
+                        elif active_plural:
+                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        else:
+                            choice = choice[0]
+                        is_plural = False
+                    else:
+                        is_plural = False  # plain string: use as-is
+
+                    active_plural[base_key] = is_plural
+                    active_plural[base_key + "_COLLECTIVE"] = is_plural
+
+                    result = result[:idx] + choice + result[end_idx+1:]
+                    i = idx + len(choice)
+                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
+                    choice = choose_unique(rng, values, used_terms)
+                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                        context_before = result[max(0, idx - 20):idx]
+                        choice = format_village(choice, context_before)
+                    active_plural[key] = False
+                    result = result[:idx] + choice + result[end_idx+1:]
+                    i = idx + len(choice)
+                else:
+                    i = end_idx + 1
+
     if result:
         result = result[0].upper() + result[1:]
         result = fix_a_an(result)
     return result
+
+def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
+    preceding_text = ""
+    for k in range(token_idx):
+        preceding_text += tokens[k]["value"]
+    preceding_text += left_text
+    return is_preceded_by_modal(preceding_text, len(preceding_text))
 
 def generate_fortune_metadata(seed_val):
     rng = SeededRandom(seed_val)
@@ -413,96 +587,44 @@ def generate_fortune_metadata(seed_val):
         
     tokens = [{"type": "text", "value": template}]
     used_terms = set()
+    active_plural = {}
 
-    # Helper to resolve compound placeholders in tokens list
-    def replace_compound_placeholder(placeholder, key_name, adj_source, item_source, fixed_adj=None):
-        while True:
-            found_idx = -1
-            for idx, token in enumerate(tokens):
-                if token["type"] == "text" and placeholder in token["value"]:
-                    found_idx = idx
-                    break
-            if found_idx == -1:
-                break
-                
-            adj = fixed_adj if fixed_adj is not None else choose_unique(rng, adj_source, used_terms)
-            item = choose_unique(rng, item_source, used_terms)
+    token_idx = 0
+    while token_idx < len(tokens):
+        token = tokens[token_idx]
+        if token["type"] != "text":
+            token_idx += 1
+            continue
             
-            formatted_val = format_item(adj, item, rng)
-            raw_val = item[0] if isinstance(item, (list, tuple)) else item
+        val = token["value"]
+        idx = val.find("{")
+        if idx == -1:
+            token_idx += 1
+            continue
             
-            token_text = tokens[found_idx]["value"]
-            split_idx = token_text.find(placeholder)
-            left_text = token_text[:split_idx]
-            right_text = token_text[split_idx + len(placeholder):]
+        end_idx = val.find("}", idx)
+        if end_idx == -1:
+            token_idx += 1
+            continue
             
-            new_tokens = []
-            if left_text:
-                new_tokens.append({"type": "text", "value": left_text})
-            new_tokens.append({
-                "type": "term",
-                "key": key_name,
-                "value": formatted_val,
-                "raw_value": raw_val,
-                "adj": adj
-            })
-            if right_text:
-                new_tokens.append({"type": "text", "value": right_text})
-                
-            tokens[found_idx:found_idx+1] = new_tokens
+        tag = val[idx+1:end_idx]
+        left_text = val[:idx]
+        right_text = val[end_idx+1:]
+        
+        if "?" in tag:
+            parts = tag.split("?")
+            key = parts[0]
+            options = parts[1].split("|")
 
-    replace_compound_placeholder("{TECH_ADJECTIVE_ITEM}", "TECH_ITEM", TERMS["TECH_ADJECTIVE"], TERMS["TECH_ITEM"])
-    replace_compound_placeholder("{CRAFT_ADJECTIVE_ITEM}", "CRAFT_ITEM", TERMS["CRAFT_ADJECTIVE"], TERMS["CRAFT_ITEM"])
-    replace_compound_placeholder("{TECH_SHINY_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "shiny")
-    replace_compound_placeholder("{TECH_RARE_ITEM}", "TECH_ITEM", None, TERMS["TECH_ITEM"], "rare")
-
-    plural_status = {}
-    
-    for key, values in TERMS.items():
-        placeholders = []
-        if key == "CREATURE_PLURAL":
-            placeholders = [("{CREATURE_PLURAL}", True), ("{CREATURE_PLURAL_COLLECTIVE}", False)]
-        elif key == "PEOPLE_SUBJECT":
-            placeholders = [("{PEOPLE_SUBJECT}", True), ("{PEOPLE_SUBJECT_COLLECTIVE}", False)]
-        else:
-            placeholders = [("{" + key + "}", False)]
-            
-        for placeholder, no_coll in placeholders:
-            while True:
-                found_idx = -1
-                for idx, token in enumerate(tokens):
-                    if token["type"] == "text" and placeholder in token["value"]:
-                        found_idx = idx
-                        break
-                if found_idx == -1:
-                    break
-                    
-                choice = choose_unique(rng, values, used_terms)
-                raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
-                
-                if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                    full_text_before = ""
-                    for i in range(found_idx):
-                        full_text_before += tokens[i]["value"]
-                    token_text = tokens[found_idx]["value"]
-                    split_idx = token_text.find(placeholder)
-                    full_text_before += token_text[:split_idx]
-                    
-                    context_before = full_text_before[max(0, len(full_text_before) - 20):]
-                    choice = format_village(choice, context_before)
-                elif isinstance(choice, (list, tuple)):
-                    itype = choice[1]
-                    choice = format_item("", choice, rng, no_collective=no_coll)
-                    p_key = placeholder.strip("{}")
-                    plural_status[p_key] = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+            if "+" in key:
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
+                raw_choice = choice
+                suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+                if suffix and suffix[0].isalnum():
+                    suffix_val = " " + suffix
                 else:
-                    choice = format_item("", choice, rng, no_collective=no_coll)
-                    
-                token_text = tokens[found_idx]["value"]
-                split_idx = token_text.find(placeholder)
-                left_text = token_text[:split_idx]
-                right_text = token_text[split_idx + len(placeholder):]
-                
+                    suffix_val = suffix
+
                 new_tokens = []
                 if left_text:
                     new_tokens.append({"type": "text", "value": left_text})
@@ -512,30 +634,163 @@ def generate_fortune_metadata(seed_val):
                     "value": choice,
                     "raw_value": raw_choice,
                     "adj": "",
-                    "no_collective": no_coll
+                    "add_collective": False
+                })
+                new_tokens.append({"type": "text", "value": suffix_val + right_text})
+                tokens[token_idx:token_idx+1] = new_tokens
+            else:
+                base_key, plural_only, add_coll = _resolve_key(key)
+
+                if base_key in TERMS:
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+                    raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+                        itype = choice[1]
+                        choice = format_item("", choice, rng, add_collective=add_coll)
+                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                    elif isinstance(choice, tuple):
+                        raw_choice = choice[0]
+                        choice = choice[0]
+                        is_plural = False
+                    else:
+                        is_plural = False
+
+                    active_plural[base_key] = is_plural
+                    active_plural[base_key + "_COLLECTIVE"] = is_plural
+
+                    suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+                    if suffix and suffix[0].isalnum():
+                        suffix_val = " " + suffix
+                    else:
+                        suffix_val = suffix
+
+                    new_tokens = []
+                    if left_text:
+                        new_tokens.append({"type": "text", "value": left_text})
+                    new_tokens.append({
+                        "type": "term",
+                        "key": base_key,
+                        "value": choice,
+                        "raw_value": raw_choice,
+                        "adj": "",
+                        "add_collective": add_coll
+                    })
+                    new_tokens.append({"type": "text", "value": suffix_val + right_text})
+                    tokens[token_idx:token_idx+1] = new_tokens
+                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
+                    choice = choose_unique(rng, values, used_terms)
+                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                        full_text_before = "".join(t["value"] for t in tokens[:token_idx]) + left_text
+                        context_before = full_text_before[max(0, len(full_text_before) - 20):]
+                        choice = format_village(choice, context_before)
+
+                    is_plural = False
+                    active_plural[key] = is_plural
+
+                    suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+                    if suffix and suffix[0].isalnum():
+                        suffix_val = " " + suffix
+                    else:
+                        suffix_val = suffix
+
+                    new_tokens = []
+                    if left_text:
+                        new_tokens.append({"type": "text", "value": left_text})
+                    new_tokens.append({
+                        "type": "term",
+                        "key": key,
+                        "value": choice,
+                        "raw_value": choice,
+                        "adj": ""
+                    })
+                    new_tokens.append({"type": "text", "value": suffix_val + right_text})
+                    tokens[token_idx:token_idx+1] = new_tokens
+                else:
+                    is_plural = active_plural.get(key, False)
+                    verb = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
+                    token["value"] = left_text + verb + right_text
+        else:
+            # Standard placeholder
+            key = tag
+
+            if "+" in key:
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
+                new_tokens = []
+                if left_text:
+                    new_tokens.append({"type": "text", "value": left_text})
+                new_tokens.append({
+                    "type": "term",
+                    "key": key,
+                    "value": choice,
+                    "raw_value": choice,
+                    "adj": "",
+                    "add_collective": False
                 })
                 if right_text:
                     new_tokens.append({"type": "text", "value": right_text})
-                    
-                tokens[found_idx:found_idx+1] = new_tokens
+                tokens[token_idx:token_idx+1] = new_tokens
+            else:
+                base_key, plural_only, add_coll = _resolve_key(key)
 
-    # Resolve verb conjugation placeholders on text tokens
-    for key, is_plural in plural_status.items():
-        plural_placeholder = "{" + key + "?"
-        for token in tokens:
-            if token["type"] == "text":
-                val = token["value"]
-                while plural_placeholder in val:
-                    idx = val.find(plural_placeholder)
-                    end_idx = val.find("}", idx)
-                    if end_idx == -1:
-                        break
-                    full_tag = val[idx:end_idx+1]
-                    content = val[idx+len(plural_placeholder):end_idx]
-                    parts = content.split("|")
-                    verb = parts[0] if is_plural else parts[1] if len(parts) > 1 else parts[0]
-                    val = val.replace(full_tag, verb, 1)
-                token["value"] = val
+                if base_key in TERMS:
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
+                    raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
+                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
+                        itype = choice[1]
+                        choice = format_item("", choice, rng, add_collective=add_coll)
+                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                    elif isinstance(choice, tuple):
+                        raw_choice = choice[0]
+                        choice = choice[0]
+                        is_plural = False
+                    else:
+                        is_plural = False
+
+                    active_plural[base_key] = is_plural
+                    active_plural[base_key + "_COLLECTIVE"] = is_plural
+
+                    new_tokens = []
+                    if left_text:
+                        new_tokens.append({"type": "text", "value": left_text})
+                    new_tokens.append({
+                        "type": "term",
+                        "key": base_key,
+                        "value": choice,
+                        "raw_value": raw_choice,
+                        "adj": "",
+                        "add_collective": add_coll
+                    })
+                    if right_text:
+                        new_tokens.append({"type": "text", "value": right_text})
+                    tokens[token_idx:token_idx+1] = new_tokens
+                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
+                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
+                    choice = choose_unique(rng, values, used_terms)
+                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
+                        full_text_before = "".join(t["value"] for t in tokens[:token_idx]) + left_text
+                        context_before = full_text_before[max(0, len(full_text_before) - 20):]
+                        choice = format_village(choice, context_before)
+
+                    active_plural[key] = False
+
+                    new_tokens = []
+                    if left_text:
+                        new_tokens.append({"type": "text", "value": left_text})
+                    new_tokens.append({
+                        "type": "term",
+                        "key": key,
+                        "value": choice,
+                        "raw_value": choice,
+                        "adj": ""
+                    })
+                    if right_text:
+                        new_tokens.append({"type": "text", "value": right_text})
+                    tokens[token_idx:token_idx+1] = new_tokens
+                else:
+                    token_idx += 1
 
     if tokens and tokens[0]["value"]:
         val = tokens[0]["value"]
@@ -2405,6 +2660,89 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             return choice;
         }
 
+        function _resolveKeyJS(key) {
+            let addCollective = false;
+            let pluralOnly = false;
+            if (key.endsWith("_COLLECTIVE")) {
+                key = key.substring(0, key.length - "_COLLECTIVE".length);
+                addCollective = true;
+            }
+            if (key.endsWith("_PLURAL")) {
+                key = key.substring(0, key.length - "_PLURAL".length);
+                pluralOnly = true;
+            }
+            return { baseKey: key, pluralOnly, addCollective };
+        }
+
+        function isPrecededByModalJS(text, index) {
+            const preceding = text.substring(0, index).trimEnd();
+            if (!preceding) return false;
+            const words = preceding.split(/\s+/);
+            if (words.length === 0) return false;
+            const lastWord = words[words.length - 1].toLowerCase().replace(/[.,;:!?"'()]/g, "");
+            return ["will", "would", "shall", "should", "can", "could", "may", "might", "must", "to"].includes(lastWord);
+        }
+
+        function _resolveChainJS(chainKey, rng, usedTerms, activePlural, forceInfinitive = false) {
+            const parts = chainKey.split("+");
+            const outputParts = [];
+            let subjectIsPlural = null;
+            let pendingAdjective = null;
+
+            for (const part of parts) {
+                const { baseKey, pluralOnly, addCollective } = _resolveKeyJS(part);
+                const values = getOptionsListForKey(baseKey);
+                if (!values || values.length === 0) continue;
+
+                let pool = values;
+                if (pluralOnly) {
+                    pool = values.filter(e => Array.isArray(e) && e[1] === "plural");
+                }
+
+                const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
+
+                if (Array.isArray(choice) && ["countable", "plural", "mass"].includes(choice[1])) {
+                    const adj = pendingAdjective || "";
+                    const formatted = formatItemJS(adj, choice, rng, !addCollective);
+                    const isPl = (choice[1] === "plural" && !formatted.toLowerCase().startsWith("a ") && !formatted.toLowerCase().startsWith("an "));
+                    if (subjectIsPlural === null) {
+                        subjectIsPlural = isPl;
+                        activePlural[baseKey] = isPl;
+                        activePlural[baseKey + "_COLLECTIVE"] = isPl;
+                    }
+                    if (pendingAdjective !== null && outputParts.length > 0 && outputParts[outputParts.length - 1] === pendingAdjective) {
+                        outputParts[outputParts.length - 1] = formatted;
+                    } else {
+                        outputParts.push(formatted);
+                    }
+                    pendingAdjective = null;
+                } else if (Array.isArray(choice)) {
+                    // Verb pair
+                    let isPl;
+                    if (forceInfinitive) {
+                        isPl = true;
+                    } else if (subjectIsPlural !== null) {
+                        isPl = subjectIsPlural;
+                    } else {
+                        const keys = Object.keys(activePlural);
+                        if (keys.length > 0) {
+                            isPl = activePlural[keys[keys.length - 1]];
+                        } else {
+                            isPl = true;
+                        }
+                    }
+                    outputParts.push(isPl ? choice[0] : choice[1]);
+                    pendingAdjective = null;
+                } else {
+                    outputParts.push(choice);
+                    pendingAdjective = choice;
+                }
+            }
+
+            const isPlural = subjectIsPlural !== null ? subjectIsPlural : (Object.keys(activePlural).length > 0 ? activePlural[Object.keys(activePlural)[Object.keys(activePlural).length - 1]] : true);
+            return { choice: outputParts.join(" "), isPlural };
+        }
+
         function generateFortuneJS(template, stepSeed) {
             let rng = new SeededRandomJS(stepSeed);
             let result = template;
@@ -2437,63 +2775,148 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 result = result.replace("{TECH_RARE_ITEM}", val);
             }
 
-            const keys = ['MAP_LOCATION', 'VILLAGE', 'DESTINATION', ...Object.keys(config.TERMS).filter(k => k !== 'MAP_LOCATION' && k !== 'VILLAGE' && k !== 'DESTINATION')];
-            
-            let pluralStatus = {};
+            let activePlural = {};
+            let i = 0;
+            while (true) {
+                const idx = result.indexOf("{", i);
+                if (idx === -1) break;
+                const endIdx = result.indexOf("}", idx);
+                if (endIdx === -1) break;
 
-            keys.forEach(key => {
-                let placeholders = [];
-                if (key === 'CREATURE_PLURAL') {
-                    placeholders = [
-                        { name: '{CREATURE_PLURAL}', noColl: true },
-                        { name: '{CREATURE_PLURAL_COLLECTIVE}', noColl: false }
-                    ];
-                } else if (key === 'PEOPLE_SUBJECT') {
-                    placeholders = [
-                        { name: '{PEOPLE_SUBJECT}', noColl: true },
-                        { name: '{PEOPLE_SUBJECT_COLLECTIVE}', noColl: false }
-                    ];
-                } else {
-                    placeholders = [
-                        { name: '{' + key + '}', noColl: false }
-                    ];
-                }
+                const tag = result.substring(idx + 1, endIdx);
 
-                const values = getOptionsListForKey(key);
-                if (!values || values.length === 0) return;
-                
-                placeholders.forEach(p => {
-                    while (result.includes(p.name)) {
-                        const choice = chooseUniqueJS(rng, values, usedTerms);
-                        let displayVal = choice;
-                        if (key === 'VILLAGE' || (key === 'DESTINATION' && config.VILLAGES.includes(choice))) {
-                            displayVal = formatVillageJS(choice);
-                        } else if (Array.isArray(choice)) {
-                            const itype = choice[1];
-                            displayVal = formatItemJS("", choice, rng, p.noColl);
-                            const pKey = p.name.replace(/[{}]/g, "");
-                            pluralStatus[pKey] = (itype === 'plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
+                if (tag.includes("?")) {
+                    const parts = tag.split("?");
+                    const key = parts[0];
+                    const options = parts[1].split("|");
+                    
+                    let displayVal, isPlural;
+                    
+                    if (key.includes("+")) {
+                        const forceInf = isPrecededByModalJS(result, idx);
+                        const resolved = _resolveChainJS(key, rng, usedTerms, activePlural, forceInf);
+                        displayVal = resolved.choice;
+                        isPlural = resolved.isPlural;
+                    } else {
+                        const { baseKey, pluralOnly, addCollective } = _resolveKeyJS(key);
+                        const values = getOptionsListForKey(baseKey);
+                        if (values && values.length > 0) {
+                            let pool = values;
+                            if (pluralOnly) {
+                                pool = values.filter(e => Array.isArray(e) && e[1] === "plural");
+                            }
+                            const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
+                            displayVal = choice;
+                            isPlural = false;
+                            if (baseKey === 'VILLAGE' || (baseKey === 'DESTINATION' && config.VILLAGES.includes(choice))) {
+                                displayVal = formatVillageJS(choice);
+                            } else if (Array.isArray(choice) && ["countable", "plural", "mass"].includes(choice[1])) {
+                                const itype = choice[1];
+                                displayVal = formatItemJS("", choice, rng, !addCollective);
+                                isPlural = (itype === 'plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
+                            } else if (Array.isArray(choice)) {
+                                // Verb pair
+                                const forceInf = isPrecededByModalJS(result, idx);
+                                if (forceInf) {
+                                    displayVal = choice[0];
+                                } else {
+                                    const keys = Object.keys(activePlural);
+                                    const lastPl = keys.length > 0 ? activePlural[keys[keys.length - 1]] : true;
+                                    displayVal = lastPl ? choice[0] : choice[1];
+                                }
+                                isPlural = false;
+                            } else {
+                                displayVal = choice;
+                            }
+                            
+                            activePlural[baseKey] = isPlural;
+                            activePlural[baseKey + "_COLLECTIVE"] = isPlural;
+                        } else if (key === 'MAP_LOCATION' || key === 'VILLAGE' || key === 'DESTINATION') {
+                            const list = getOptionsListForKey(key);
+                            const choice = chooseUniqueJS(rng, list, usedTerms);
+                            displayVal = choice;
+                            if (key === 'VILLAGE' || (key === 'DESTINATION' && config.VILLAGES.includes(choice))) {
+                                displayVal = formatVillageJS(choice);
+                            }
+                            isPlural = false;
+                            activePlural[key] = isPlural;
+                        } else {
+                            isPlural = activePlural[key] || false;
+                            displayVal = undefined;
                         }
-                        result = result.replace(p.name, displayVal);
                     }
-                });
-            });
+                    
+                    if (displayVal !== undefined) {
+                        const suffix = isPlural ? options[0] : (options.length > 1 ? options[1] : options[0]);
+                        const val = (suffix && /^[a-zA-Z0-9]/.test(suffix)) ? (displayVal + " " + suffix) : (displayVal + suffix);
+                        result = result.substring(0, idx) + val + result.substring(endIdx + 1);
+                        i = idx + val.length;
+                    } else {
+                        const isPluralVal = activePlural[key] || false;
+                        const suffix = isPluralVal ? options[0] : (options.length > 1 ? options[1] : options[0]);
+                        result = result.substring(0, idx) + suffix + result.substring(endIdx + 1);
+                        i = idx + suffix.length;
+                    }
+                } else {
+                    const key = tag;
+                    if (key.includes("+")) {
+                        const forceInf = isPrecededByModalJS(result, idx);
+                        const resolved = _resolveChainJS(key, rng, usedTerms, activePlural, forceInf);
+                        result = result.substring(0, idx) + resolved.choice + result.substring(endIdx + 1);
+                        i = idx + resolved.choice.length;
+                    } else {
+                        const { baseKey, pluralOnly, addCollective } = _resolveKeyJS(key);
+                        const values = getOptionsListForKey(baseKey);
+                        if (values && values.length > 0) {
+                            let pool = values;
+                            if (pluralOnly) {
+                                pool = values.filter(e => Array.isArray(e) && e[1] === "plural");
+                            }
+                            const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
+                            let displayVal = choice;
+                            let isPlural = false;
+                            if (baseKey === 'VILLAGE' || (baseKey === 'DESTINATION' && config.VILLAGES.includes(choice))) {
+                                displayVal = formatVillageJS(choice);
+                            } else if (Array.isArray(choice) && ["countable", "plural", "mass"].includes(choice[1])) {
+                                const itype = choice[1];
+                                displayVal = formatItemJS("", choice, rng, !addCollective);
+                                isPlural = (itype === 'plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
+                            } else if (Array.isArray(choice)) {
+                                // Verb pair
+                                const forceInf = isPrecededByModalJS(result, idx);
+                                if (forceInf) {
+                                    displayVal = choice[0];
+                                } else {
+                                    const keys = Object.keys(activePlural);
+                                    const lastPl = keys.length > 0 ? activePlural[keys[keys.length - 1]] : true;
+                                    displayVal = lastPl ? choice[0] : choice[1];
+                                }
+                                isPlural = false;
+                            } else {
+                                displayVal = choice;
+                            }
 
-            // Resolve verb conjugation placeholders like {PEOPLE_SUBJECT?mention|mentions}
-            Object.keys(pluralStatus).forEach(pKey => {
-                const isPlural = pluralStatus[pKey];
-                const pluralPlaceholder = "{" + pKey + "?";
-                while (result.includes(pluralPlaceholder)) {
-                    const idx = result.indexOf(pluralPlaceholder);
-                    const endIdx = result.indexOf("}", idx);
-                    if (endIdx === -1) break;
-                    const fullTag = result.substring(idx, endIdx + 1);
-                    const content = result.substring(idx + pluralPlaceholder.length, endIdx);
-                    const parts = content.split("|");
-                    const verb = isPlural ? parts[0] : (parts.length > 1 ? parts[1] : parts[0]);
-                    result = result.replace(fullTag, verb);
+                            activePlural[baseKey] = isPlural;
+                            activePlural[baseKey + "_COLLECTIVE"] = isPlural;
+
+                            result = result.substring(0, idx) + displayVal + result.substring(endIdx + 1);
+                            i = idx + displayVal.length;
+                        } else if (key === 'MAP_LOCATION' || key === 'VILLAGE' || key === 'DESTINATION') {
+                            const list = getOptionsListForKey(key);
+                            const choice = chooseUniqueJS(rng, list, usedTerms);
+                            let displayVal = choice;
+                            if (key === 'VILLAGE' || (key === 'DESTINATION' && config.VILLAGES.includes(choice))) {
+                                displayVal = formatVillageJS(choice);
+                            }
+                            activePlural[key] = false;
+                            result = result.substring(0, idx) + displayVal + result.substring(endIdx + 1);
+                            i = idx + displayVal.length;
+                        } else {
+                            i = endIdx + 1;
+                        }
+                    }
                 }
-            });
+            }
             
             if (result) {
                 result = result.charAt(0).toUpperCase() + result.slice(1);
@@ -2830,7 +3253,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             if (itype === "plural" && !unit && !noCollective) {
                 if (rng) {
-                    if (rng.nextInt() % 2 === 0) {
+                    if (((rng.nextInt() >> 8) % 2) === 0) {
                         unit = rng.choice(COLLECTIVE_PREFIXES_JS);
                     }
                 } else {
@@ -3326,7 +3749,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         // Helper functions for template permutations
         function extractPlaceholders(template) {
-            const regex = /\{([A-Z_]+)\}/g;
+            const regex = /\{([a-zA-Z_0-9+?|]+)\}/g;
             let matches = [];
             let match;
             while ((match = regex.exec(template)) !== null) {
@@ -3409,7 +3832,29 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             const counts = {};
             placeholders.forEach(ph => {
-                counts[ph] = (counts[ph] || 0) + 1;
+                let tagKey = ph;
+                if (tagKey.includes("?")) {
+                    tagKey = tagKey.split("?")[0];
+                }
+                
+                const { baseKey } = _resolveKeyJS(tagKey);
+                const isChoice = tagKey.includes("+") || 
+                                 baseKey === 'MAP_LOCATION' || 
+                                 baseKey === 'VILLAGE' || 
+                                 baseKey === 'DESTINATION' || 
+                                 config.TERMS[baseKey] !== undefined;
+                                 
+                if (!isChoice) {
+                    return; // skip reference-only tag
+                }
+
+                if (tagKey.includes("+")) {
+                    tagKey.split("+").forEach(component => {
+                        counts[component] = (counts[component] || 0) + 1;
+                    });
+                } else {
+                    counts[tagKey] = (counts[tagKey] || 0) + 1;
+                }
             });
 
             let totalCount = 1;
@@ -3417,26 +3862,31 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             for (const ph in counts) {
                 const M = counts[ph];
                 let list = [];
-                if (ph === 'MAP_LOCATION') {
+                const { baseKey, pluralOnly } = _resolveKeyJS(ph);
+
+                if (baseKey === 'MAP_LOCATION') {
                     list = Array(config.MAP_LOCATIONS.length).fill(1);
-                } else if (ph === 'VILLAGE') {
+                } else if (baseKey === 'VILLAGE') {
                     list = Array(config.VILLAGES.length).fill(1);
-                } else if (ph === 'DESTINATION') {
+                } else if (baseKey === 'DESTINATION') {
                     list = Array(config.MAP_LOCATIONS.length + config.VILLAGES.length).fill(1);
-                } else if (ph === 'TECH_ADJECTIVE_ITEM') {
+                } else if (baseKey === 'TECH_ADJECTIVE_ITEM') {
                     const len = (config.TERMS['TECH_ADJECTIVE'] || []).length * getCategoryVariationsCount(config.TERMS['TECH_ITEM'] || []);
                     list = Array(len).fill(1);
-                } else if (ph === 'CRAFT_ADJECTIVE_ITEM') {
+                } else if (baseKey === 'CRAFT_ADJECTIVE_ITEM') {
                     const len = (config.TERMS['CRAFT_ADJECTIVE'] || []).length * getCategoryVariationsCount(config.TERMS['CRAFT_ITEM'] || []);
                     list = Array(len).fill(1);
-                } else if (ph === 'TECH_SHINY_ITEM') {
+                } else if (baseKey === 'TECH_SHINY_ITEM') {
                     const len = getCategoryVariationsCount(config.TERMS['TECH_ITEM'] || []);
                     list = Array(len).fill(1);
-                } else if (ph === 'TECH_RARE_ITEM') {
+                } else if (baseKey === 'TECH_RARE_ITEM') {
                     const len = getCategoryVariationsCount(config.TERMS['TECH_ITEM'] || []);
                     list = Array(len).fill(1);
                 } else {
-                    list = config.TERMS[ph] || [];
+                    list = config.TERMS[baseKey] || [];
+                    if (pluralOnly) {
+                        list = list.filter(e => Array.isArray(e) && e[1] === "plural");
+                    }
                 }
 
                 totalCount *= getCategoryUniquePermutationsCount(list, M);

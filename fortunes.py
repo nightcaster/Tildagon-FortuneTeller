@@ -461,21 +461,21 @@ TERMS = {
 }
 
 UPBEAT_TEMPLATES = [
-    "You're in luck if {PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB} {CREATURE}.",
+    "{PEOPLE_SUBJECT} will {HACKER_ADVERB+SOCIAL_VERB} {CREATURE}.",
     "Try {CAMP_ACTION_ACTIVE} at {DESTINATION}.",
     "Your code will finally compile after {VISIT_TYPE} {MAP_LOCATION}.",
     "{CREATURE_PLURAL_COLLECTIVE} riding {CREATURE_PLURAL} will bring great fortune to {VILLAGE}.",
     "{PEOPLE_SUBJECT_COLLECTIVE} will {CAMP_ACTION} .",
     "{VISIT_TYPE} {VILLAGE} will inspire you to {CAMP_ACTION}.",
-    "You will discover {TECH_ADJECTIVE_ITEM} while trying to {HACKER_ACTION}.",
-    "You will discover {CRAFT_ADJECTIVE_ITEM} while trying to {HACKER_ACTION}.",
+    "You will discover {TECH_ADJECTIVE+TECH_ITEM} while trying to {HACKER_ACTION}.",
+    "You will discover {CRAFT_ADJECTIVE+CRAFT_ITEM} while trying to {HACKER_ACTION}.",
     "Your {ACTIVE_DEVICE} will flawlessly {COMPUTE_VERB} {COMPUTE_TARGET}.",
     "While trying to {HACKER_ACTION} at {DESTINATION}, {ABSURD_OBJECT} will appear.",
     "You will meet {PEOPLE_SUBJECT_COLLECTIVE} who will help you {HACKER_ACTION}.",
-    "To {CAMP_ACTION}, you must first find {TECH_ADJECTIVE_ITEM}.",
-    "To {CAMP_ACTION}, you must first obtain {CRAFT_ADJECTIVE_ITEM}.",
-    "If you {CAMP_ACTION} {TIME}, you might find {TECH_ADJECTIVE_ITEM}.",
-    "If you {CAMP_ACTION} {TIME}, you might create {CRAFT_ADJECTIVE_ITEM}.",
+    "To {CAMP_ACTION}, you must first find {TECH_ADJECTIVE+TECH_ITEM}.",
+    "To {CAMP_ACTION}, you must first obtain {CRAFT_ADJECTIVE+CRAFT_ITEM}.",
+    "If you {CAMP_ACTION} {TIME}, you might find {TECH_ADJECTIVE+TECH_ITEM}.",
+    "If you {CAMP_ACTION} {TIME}, you might create {CRAFT_ADJECTIVE+CRAFT_ITEM}.",
     "A talk about {TECH_TRIVIA} will explain how to easily {HACKER_ACTION}.",
     "You will find luck when you {COMPUTE_VERB} {COMPUTE_TARGET}.",
     "Fortune awaits when you {HARDWARE_VERB} {HARDWARE_TARGET}.",
@@ -485,8 +485,8 @@ UPBEAT_TEMPLATES = [
     "{PEOPLE_SUBJECT} at {DESTINATION} will help you {HACKER_ACTION}.",
     "To trade {TECH_RARE_ITEM} with {PEOPLE_SUBJECT}, you should visit {DESTINATION}.",
     "A session at {VILLAGE} will teach you all about {TECH_TRIVIA}.",
-    "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {TECH_ADJECTIVE_ITEM}.",
-    "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {CRAFT_ADJECTIVE_ITEM}.",
+    "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {TECH_ADJECTIVE+TECH_ITEM}.",
+    "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {CRAFT_ADJECTIVE+CRAFT_ITEM}.",
     "A mysterious friendly signal at {DESTINATION} suggests you should immediately {CAMP_ACTION}.",
     "You will spot Jonty fixing {FESTIVAL_INFRASTRUCTURE} using {CREATURE_PLURAL_COLLECTIVE}.",
     "A mysterious firmware update signed by Jonty will grant your {ACTIVE_DEVICE} {SPECIAL_DEVICE_FEATURE}.",
@@ -515,8 +515,8 @@ OMINOUS_TEMPLATES = [
     "{TIME}, you will spend hours attempting to explain {TECH_TRIVIA} to {CREATURE}.",
     "A mysterious flashing LED at {DESTINATION} is actually an ominous message about {TECH_TRIVIA}.",
     "Your {ACTIVE_DEVICE} will fail due to {HAZARD}.",
-    "You will accidentally trade your {ACTIVE_DEVICE} for {TECH_ADJECTIVE_ITEM}.",
-    "You will accidentally trade your {ACTIVE_DEVICE} for {CRAFT_ADJECTIVE_ITEM}.",
+    "You will accidentally trade your {ACTIVE_DEVICE} for {TECH_ADJECTIVE+TECH_ITEM}.",
+    "You will accidentally trade your {ACTIVE_DEVICE} for {CRAFT_ADJECTIVE+CRAFT_ITEM}.",
     "Beware of {CREATURE} trying to {COMPUTE_VERB} your unprotected {ACTIVE_DEVICE}.",
     "Beware of {CREATURE} trying to {HARDWARE_VERB} your unguarded {ACTIVE_DEVICE}.",
     "If you see {HAZARD} creeping around {DESTINATION}, take shelter at {MAP_LOCATION}.",
@@ -597,7 +597,7 @@ def format_item(adjective, item, rng=None, add_collective=False):
         return phrase
 
 def _resolve_key(key):
-    """
+    '''
     Strip _PLURAL and/or _COLLECTIVE suffixes from a template placeholder key.
     Returns (base_key, plural_only, add_collective).
 
@@ -607,12 +607,7 @@ def _resolve_key(key):
 
     Examples:
       "CREATURE"                   -> ("CREATURE", False, False)
-      "CREATURE_PLURAL"            -> ("CREATURE", True,  False)
-      "CREATURE_COLLECTIVE"        -> ("CREATURE", False, True)
-      "CREATURE_PLURAL_COLLECTIVE" -> ("CREATURE", True,  True)
-      "PEOPLE_SUBJECT"             -> ("PEOPLE_SUBJECT", False, False)
-      "PEOPLE_SUBJECT_COLLECTIVE"  -> ("PEOPLE_SUBJECT", False, True)
-    """
+    '''
     add_collective = False
     plural_only = False
     if key.endswith("_COLLECTIVE"):
@@ -623,34 +618,24 @@ def _resolve_key(key):
         plural_only = True
     return key, plural_only, add_collective
 
+def is_preceded_by_modal(text, index):
+    preceding = text[:index].rstrip()
+    if not preceding:
+        return False
+    words = preceding.split()
+    if not words:
+        return False
+    last_word = words[-1].lower().strip(".,;:!?\"'()")
+    return last_word in {"will", "would", "shall", "should", "can", "could", "may", "might", "must", "to"}
+
 # Noun-type markers recognised in TERMS tuple entries
 _NOUN_TYPES = ("countable", "plural", "mass")
 
-def _resolve_chain(chain_key, rng, used_terms, active_plural):
-    """
-    Resolve a '+'-chained placeholder such as 'PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB'.
-    Parts are resolved left to right. The first noun's plurality drives verb agreement.
-
-    Entry type detection (per TERMS entry):
-      tuple where [1] in _NOUN_TYPES        -> noun  (formatted with format_item)
-      tuple where [1] not in _NOUN_TYPES    -> verb pair: [0]=plural/infinitive, [1]=singular
-      plain string                          -> adverb / adjective (used as-is)
-
-    Returns (formatted_text, is_plural).
-    Updates active_plural with the first noun's base_key.
-
-    Examples:
-      'PEOPLE_SUBJECT+SOCIAL_VERB'
-        plural  subject -> 'hackers misplace'
-        singular subject -> 'a furry misplaces'
-      'PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB'
-        -> 'hackers frantically misplace' / 'a furry accidentally misplaces'
-      'PEOPLE_SUBJECT+SOCIAL_VERB?themselves|themself'
-        (the ?suffix is stripped before calling this fn; only the chain part is passed)
-    """
+def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=False):
     parts = chain_key.split("+")
     output_parts = []
     subject_is_plural = None
+    pending_adjective = None
 
     for part in parts:
         base_key, plural_only, add_coll = _resolve_key(part)
@@ -665,23 +650,38 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural):
         choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
 
         if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
-            # Noun — format with article / collective prefix
-            formatted = format_item("", choice, rng, add_collective=add_coll)
+            # Noun — format with article / collective prefix, apply pending adjective
+            adj = pending_adjective or ""
+            formatted = format_item(adj, choice, rng, add_collective=add_coll)
             is_pl = (choice[1] == "plural" and not formatted.lower().startswith(("a ", "an ")))
             if subject_is_plural is None:
                 subject_is_plural = is_pl
                 active_plural[base_key] = is_pl
                 active_plural[base_key + "_COLLECTIVE"] = is_pl
-            output_parts.append(formatted)
+            
+            if pending_adjective is not None and len(output_parts) > 0 and output_parts[-1] == pending_adjective:
+                output_parts[-1] = formatted
+            else:
+                output_parts.append(formatted)
+            pending_adjective = None
         elif isinstance(choice, tuple):
-            # Verb pair — pick form based on subject plurality
-            is_pl = subject_is_plural if subject_is_plural is not None else False
+            # Verb pair — pick form based on subject plurality or active_plural fallback
+            if force_infinitive:
+                is_pl = True
+            elif subject_is_plural is not None:
+                is_pl = subject_is_plural
+            elif active_plural:
+                is_pl = list(active_plural.values())[-1]
+            else:
+                is_pl = True
             output_parts.append(choice[0] if is_pl else choice[1])
+            pending_adjective = None
         else:
             # Plain string (adverb / adjective) — use as-is
             output_parts.append(choice)
+            pending_adjective = choice
 
-    is_plural = subject_is_plural if subject_is_plural is not None else False
+    is_plural = subject_is_plural if subject_is_plural is not None else (list(active_plural.values())[-1] if active_plural else True)
     return " ".join(output_parts), is_plural
 
 def choose_unique(rng, values, used_terms):
@@ -747,7 +747,8 @@ def generate_fortune(seed_val):
 
             if "+" in key:
                 # Chain with conditional suffix: e.g. "{PEOPLE_SUBJECT+SOCIAL_VERB?themselves|themself}"
-                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
+                force_inf = is_preceded_by_modal(result, idx)
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
             else:
                 base_key, plural_only, add_coll = _resolve_key(key)
 
@@ -759,7 +760,13 @@ def generate_fortune(seed_val):
                         choice = format_item("", choice, rng, add_collective=add_coll)
                         is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
-                        choice = choice[0]  # verb pair: use infinitive/plural form
+                        force_inf = is_preceded_by_modal(result, idx)
+                        if force_inf:
+                            choice = choice[0]
+                        elif active_plural:
+                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        else:
+                            choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False  # plain string: use as-is
@@ -795,7 +802,8 @@ def generate_fortune(seed_val):
 
             if "+" in key:
                 # Chain: e.g. "{PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB}"
-                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
+                force_inf = is_preceded_by_modal(result, idx)
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
                 result = result[:idx] + choice + result[end_idx+1:]
                 i = idx + len(choice)
             else:
@@ -809,7 +817,13 @@ def generate_fortune(seed_val):
                         choice = format_item("", choice, rng, add_collective=add_coll)
                         is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
-                        choice = choice[0]  # verb pair: use infinitive/plural form
+                        force_inf = is_preceded_by_modal(result, idx)
+                        if force_inf:
+                            choice = choice[0]
+                        elif active_plural:
+                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        else:
+                            choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False  # plain string: use as-is
@@ -835,6 +849,13 @@ def generate_fortune(seed_val):
         result = result[0].upper() + result[1:]
         result = fix_a_an(result)
     return result
+
+def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
+    preceding_text = ""
+    for k in range(token_idx):
+        preceding_text += tokens[k]["value"]
+    preceding_text += left_text
+    return is_preceded_by_modal(preceding_text, len(preceding_text))
 
 def generate_fortune_metadata(seed_val):
     rng = SeededRandom(seed_val)
@@ -922,7 +943,8 @@ def generate_fortune_metadata(seed_val):
 
             if "+" in key:
                 # Chain with conditional suffix: e.g. "{PEOPLE_SUBJECT+SOCIAL_VERB?themselves|themself}"
-                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
+                force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
                 raw_choice = choice
                 suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
                 if suffix and suffix[0].isalnum():
@@ -956,7 +978,13 @@ def generate_fortune_metadata(seed_val):
                         is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
-                        choice = choice[0]  # verb pair: use infinitive/plural form
+                        force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
+                        if force_inf:
+                            choice = choice[0]
+                        elif active_plural:
+                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        else:
+                            choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False  # plain string: use as-is
@@ -1022,7 +1050,8 @@ def generate_fortune_metadata(seed_val):
 
             if "+" in key:
                 # Chain: e.g. "{PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB}"
-                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
+                force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
+                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
                 new_tokens = []
                 if left_text:
                     new_tokens.append({"type": "text", "value": left_text})
@@ -1050,7 +1079,13 @@ def generate_fortune_metadata(seed_val):
                         is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
-                        choice = choice[0]  # verb pair: use infinitive/plural form
+                        force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
+                        if force_inf:
+                            choice = choice[0]
+                        elif active_plural:
+                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        else:
+                            choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False  # plain string: use as-is
