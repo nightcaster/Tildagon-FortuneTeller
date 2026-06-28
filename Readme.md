@@ -33,6 +33,7 @@ The application dynamically generates fortunes from templates (defined in `fortu
    - If a chain doesn't contain a subject noun (e.g. `{HACKER_ADVERB+SOCIAL_VERB}`), the verb falls back to agree with the most recently resolved noun.
 4. **Modal Verbs:** If the verb (or chain containing a verb) is preceded by a modal or infinitive marker (such as `will`, `would`, `shall`, `should`, `can`, `could`, `may`, `might`, `must`, `to`), the parser automatically forces the verb into its infinitive/plural form (e.g. `"will quietly discover"` instead of `"will quietly discovers"`).
 5. **Conditional Suffixes (`?`):** You can append conditional text based on the resolved tag's plurality, formatted as `{TAG?plural_suffix|singular_suffix}` (e.g. `{PEOPLE_SUBJECT?are coding late|is coding late}`).
+6. **Template Weighting:** Templates are stored as tuples `(template_string, weight)` (e.g., `("If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.", 19.56)`). The engine uses a deterministic weighted random selection to pick templates, allowing control over the rarity of different sentence structures.
 
 ## Development and Testing
 

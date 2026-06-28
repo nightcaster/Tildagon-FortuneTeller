@@ -17,6 +17,22 @@ class SeededRandom:
             return None
         return lst[self.next_int() % len(lst)]
 
+    def weighted_choice(self, lst):
+        if not lst:
+            return None
+        total_weight = 0.0
+        for item, weight in lst:
+            total_weight += weight
+        if total_weight <= 0:
+            return lst[0][0]
+        r = (self.next_int() / 2147483647.0) * total_weight
+        running = 0.0
+        for item, weight in lst:
+            running += weight
+            if r <= running:
+                return item[0] if isinstance(item, (list, tuple)) else item
+        return lst[-1][0]
+
 MAP_LOCATIONS = [
     "Stage A",
     "Stage B",
@@ -156,61 +172,66 @@ TERMS = {
     "VILLAGE": VILLAGES,
     "DESTINATION": MAP_LOCATIONS + VILLAGES,
     "PEOPLE_SUBJECT": [
-        ("friend", "countable"),
-        ("friends", "plural"),
-        ("volunteer", "countable"),
-        ("volunteers", "plural"),
-        ("furry", "countable"),
-        ("furries", "plural"),
-        ("hacker", "countable"),
-        ("hackers", "plural"),
-        ("hardware wizard", "countable"),
-        ("hardware wizards", "plural"),
-        ("event sponsor", "countable"),
-        ("event sponsors", "plural"),
-        ("Null Sector DJ", "countable"),
-        ("Null Sector DJs", "plural"),
-        ("event organizer", "countable"),
-        ("event organizers", "plural"),
+        ("friend", "NOUN:countable"),
+        ("friends", "NOUN:plural"),
+        ("volunteer", "NOUN:countable"),
+        ("volunteers", "NOUN:plural"),
+        ("furry", "NOUN:countable"),
+        ("furries", "NOUN:plural"),
+        ("hacker", "NOUN:countable"),
+        ("hackers", "NOUN:plural"),
+        # ("hardware wizard", "NOUN:countable"),
+        # ("hardware wizards", "NOUN:plural"),
+        # ("event sponsor", "NOUN:countable"),
+        # ("event sponsors", "NOUN:plural"),
+        ("Null Sector DJ", "NOUN:countable"),
+        ("Null Sector DJs", "NOUN:plural"),
+        ("event organizer", "NOUN:countable"),
+        ("event organizers", "NOUN:plural"),
     ],
     "CREATURE": [
-        ("robot", "countable"),
-        ("creature", "countable"),
-        ("duck", "countable"),
-        ("ducks", "plural"),
-        ("spider", "countable"),
-        ("spiders", "plural"),
-        ("spider wearing a tiny high-vis vest", "countable"),
-        ("spiders wearing tiny high-vis vests", "plural"),
-        ("GPS rave bots", "plural"),
-        ("sentient hexpansion", "countable"),
-        ("hexpansions", "plural"),
-        ("volunteers", "plural"),
-        ("rogue deer", "countable"),
-        ("rogue deer", "plural"),
+        ("robot", "NOUN:countable"),
+        ("creature", "NOUN:countable"),
+        ("duck", "NOUN:countable"),
+        ("ducks", "NOUN:plural"),
+        ("spider", "NOUN:countable"),
+        ("spiders", "NOUN:plural"),
+        ("GPS rave bots", "NOUN:plural"),
+        ("sentient hexpansion", "NOUN:countable"),
+        ("hexpansions", "NOUN:plural"),
+        ("volunteers", "NOUN:plural"),
+        ("rogue deer", "NOUN:countable"),
+        ("rogue deer", "NOUN:plural"),
     ],
     "COMPUTE_VERB": [
-        "debug",
-        "program",
-        "optimize",
-        "reverse engineer",
-        "analyse",
+        ("debug", "debugs", "debugging", "debugged"),
+        ("program", "programs", "programming", "programmed"),
+        ("optimize", "optimizes", "optimizing", "optimized"),
+        ("compile", "compiles", "compiling", "compiled"),
+        ("hack", "hacks", "hacking", "hacked"),
+        ("engineer", "engineers", "engineering", "engineered"),
+        ("social engineer", "social engineers", "social engineering", "social engineered"),
+        ("reverse engineer", "reverse engineers", "reverse engineering", "reverse engineered"),
+        ("analyse", "analyses", "analysing", "analysed"),
     ],
     "HARDWARE_VERB": [
-        "solder",
-        "repair",
-        "upgrade",
-        "reverse engineer",
-        "overclock",
-        "re-solder",
+        ("solder", "solders", "soldering", "soldered"),
+        ("hack", "hacks", "hacking", "hacked"),
+        ("repair", "repairs", "repairing", "repaired"),
+        ("upgrade", "upgrades", "upgrading", "upgraded"),
+        ("reverse engineer", "reverse engineers", "reverse engineering", "reverse engineered"),
+        ("overclock", "overclocks", "overclocking", "overclocked"),
+        ("re-solder", "re-solders", "re-soldering", "re-soldered"),
     ],
     "SOCIAL_VERB": [
-        ("trade with", "trades with"),
-        ("spill a drink on", "spills a drink on"),
-        ("buy a drink for", "buys a drink for"),
-        ("discover", "discovers"),
-        ("find", "finds"),
-        ("misplace", "misplaces"),
+        ("trade with", "trades with", "trading with", "traded with"),
+        ("spill a drink on", "spills a drink on", "spilling a drink on", "spilled a drink on"),
+        ("buy a drink for", "buys a drink for", "buying a drink for", "bought a drink for"),
+        ("discover", "discovers", "discovering", "discovered"),
+        ("find", "finds", "finding", "found"),
+        ("misplace", "misplaces", "misplacing", "misplaced"),
+        ("dance with", "dances with", "dancing with", "danced with"),
+        ("sing kareoke with", "sings kareoke with", "singing karekoke with", "sang kareoke with"),
     ],
     "HACKER_ADVERB": [
         "enthusiastically",
@@ -225,81 +246,90 @@ TERMS = {
         "unexpectedly",
     ],
     "ACTIVE_DEVICE": [
-        ("Tildagon", "countable"),
-        ("laptop", "countable"),
-        ("RFID reader", "countable"),
-        ("Flipper Zero", "countable"),
-        ("microcontroller", "countable"),
+        ("Tildagon", "NOUN:countable"),
+        ("laptop", "NOUN:countable"),
+        ("RFID reader", "NOUN:countable"),
+        ("Flipper Zero", "NOUN:countable"),
+        ("microcontroller", "NOUN:countable"),
+        ("smartphone", "NOUN:countable"),
+        ("DECT phone", "NOUN:countable"),
     ],
     "BENCH_TOOL": [
-        ("solder station", "countable"),
-        ("oscilloscope", "countable"),
-        ("3D printer", "countable"),
-        ("Tesla coil", "countable"),
-        ("amateur radio", "countable"),
-        ("Wi-Fi antenna", "countable"),
-        ("soldering iron", "countable"),
+        ("solder station", "NOUN:countable"),
+        ("oscilloscope", "NOUN:countable"),
+        ("3D printer", "NOUN:countable"),
+        ("amateur radio", "NOUN:countable"),
+        ("SDR receiver", "NOUN:countable"),
+        ("soldering iron", "NOUN:countable"),
     ],
     "COMPUTE_TARGET": [
-        "someone else's badge",
-        "some sketchy firmware",
-        "a hidden easter egg",
-        "an ancient floppy disk",
-        "an arcade machine",
-        "a game cartridge",
+        ("someone else's badge", "NOUN:mass"),
+        ("someone else's badges", "NOUN:plural"),
+        ("sketchy firmware", "NOUN:mass"),
+        ("hidden easter egg", "NOUN:countable"),
+        ("hidden easter eggs", "NOUN:plural"),
+        ("3.5\" floppy disk", "NOUN:countable"),
+        ("3.5\" floppy disks", "NOUN:plural"),
+        ("arcade machine", "NOUN:countable"),
+        ("arcade machines", "NOUN:plural"),
+        ("game cartridge", "NOUN:countable"),
+        ("game cartridges", "NOUN:plural"),
     ],
     "HARDWARE_TARGET": [
-        "a custom PCB",
-        "a tiny IC",
-        "a GPS tracker",
-        "a prototype hexpansion",
-        "an overpowered microcontroller",
-        "an oscilloscope",
-        "a prototype Tildagon frontboard",
-        "a digital synth",
-        "an unfinished hexpansion",
+        ("custom PCB", "NOUN:countable"),
+        ("custom PCBs", "NOUN:plural"),
+        ("tiny IC", "NOUN:countable"),
+        ("tiny ICs", "NOUN:plural"),
+        ("GPS tracker", "NOUN:countable"),
+        ("GPS trackers", "NOUN:plural"),
+        ("prototype hexpansion", "NOUN:countable"),
+        ("prototype hexpansions", "NOUN:plural"),
+        ("overpowered microcontroller", "NOUN:countable"),
+        ("overpowered microcontrollers", "NOUN:plural"),
+        ("oscilloscope", "NOUN:countable"),
+        ("oscilloscopes", "NOUN:plural"),
+        ("prototype Tildagon frontboard", "NOUN:countable"),
+        ("prototype Tildagon frontboards", "NOUN:plural"),
+        ("digital synth", "NOUN:countable"),
+        ("digital synths", "NOUN:plural"),
+        ("unfinished hexpansion", "NOUN:countable"),
+        ("unfinished hexpansions", "NOUN:plural"),
     ],
     "SOCIAL_OBJECT": [
-        ("cold beverage", "countable"),
-        ("badge addon", "countable"),
-        ("duck", "countable"),
-        ("dynamic token", "countable"),
+        ("cold beverage", "NOUN:countable"),
+        ("badge addon", "NOUN:countable"),
+        ("duck", "NOUN:countable"),
+        ("dynamic token", "NOUN:countable"),
     ],
     "ABSURD_OBJECT": [
-        ("duck", "countable"),
-        ("bratwurst", "countable"),
-        ("dynamic token", "countable"),
-        ("LED strip woven into a hammock", "countable"),
-        ("solder flux", "mass", "tube of"),
+        ("duck", "NOUN:countable"),
+        ("bratwurst", "NOUN:countable"),
+        ("dynamic token", "NOUN:countable"),
+        ("LED strip woven into a hammock", "NOUN:countable"),
+        ("solder flux", "NOUN:mass", "tube of"),
+        ("spider wearing a tiny high-vis vest", "NOUN:countable"),
+        ("spiders wearing tiny high-vis vests", "NOUN:plural"),
     ],
     "CAMP_ACTION": [
-        "volunteer at the bar",
-        "take a break",
-        "go on an adventure",
-        "sleep for 8 hours",
-        "attend a talk on retro computing",
-        "stay up all night coding",
-    ],
-    "CAMP_ACTION_ACTIVE": [
-        "volunteering at the bar",
-        "taking a break",
-        "going on an adventure",
-        "sleeping for 8 hours",
-        "attending a talk on retro computing",
-        "staying up all night coding",
+        ("volunteer at the bar", "volunteers at the bar", "volunteering at the bar", "volunteered at the bar"),
+        ("take a break", "takes a break", "taking a break", "took a break"),
+        ("go on an adventure", "goes on an adventure", "going on an adventure", "went on an adventure"),
+        ("sleep for 8 hours", "sleeps for 8 hours", "sleeping for 8 hours", "slept for 8 hours"),
+        ("attend a talk on retro computing", "attends a talk on retro computing", "attending a talk on retro computing", "attended a talk on retro computing"),
+        ("stay up all night coding", "stays up all night coding", "staying up all night coding", "stayed up all night coding"),
     ],
     "HACKER_ACTION": [
-        "take a risk",
-        "solve a difficult puzzle",
-        "start a side project",
-        "learn lockpicking",
-        "explore the campsite network",
-        "solder some SMD components",
-        "tinker with high-voltage gear",
-        "exchange rare electronic parts",
-        "write firmware in MicroPython",
-        "repair retro arcade games",
-        "configure a custom gateway",
+        ("take a risk", "takes a risk", "taking a risk", "took a risk"),
+        ("solve a difficult puzzle", "solves a difficult puzzle", "solving a difficult puzzle", "solved a difficult puzzle"),
+        ("start a side project", "starts a side project", "starting a side project", "started a side project"),
+        ("learn lockpicking", "learns lockpicking", "learning lockpicking", "learned lockpicking"),
+        ("explore the campsite network", "explores the campsite network", "exploring the campsite network", "explored the campsite network"),
+        ("solder some SMD components", "solders some SMD components", "soldering some SMD components", "soldered some SMD components"),
+        ("tinker with high-voltage gear", "tinkers with high-voltage gear", "tinkering with high-voltage gear", "tinkered with high-voltage gear"),
+        ("exchange rare electronic parts", "exchanges rare electronic parts", "exchanging rare electronic parts", "exchanged rare electronic parts"),
+        ("write firmware in MicroPython", "writes firmware in MicroPython", "writing firmware in MicroPython", "wrote firmware in MicroPython"),
+        ("repair retro arcade games", "repairs retro arcade games", "repairing retro arcade games", "repaired retro arcade games"),
+        ("configure a custom gateway", "configures a custom gateway", "configuring a custom gateway", "configured a custom gateway"),
     ],
     "HAZARD": [
         "loose solder joints",
@@ -347,30 +377,30 @@ TERMS = {
         "highly sought-after",
     ],
     "TECH_ITEM": [
-        ("badge addon", "countable"),
-        ("firmware update", "countable"),
-        ("USB drive", "countable"),
-        ("LED strip", "countable"),
-        ("oscilloscope", "countable"),
-        ("custom PCB", "countable"),
-        ("RF antenna", "countable"),
-        ("solder", "mass", "spool of"),
-        ("fiber optic cable", "mass", "length of"),
-        ("thermal paste", "mass", "dollop of"),
-        ("resistors", "plural", "strip of"),
+        ("badge addon", "NOUN:countable"),
+        ("firmware update", "NOUN:countable"),
+        ("USB drive", "NOUN:countable"),
+        ("LED strip", "NOUN:countable"),
+        ("oscilloscope", "NOUN:countable"),
+        ("custom PCB", "NOUN:countable"),
+        ("RF antenna", "NOUN:countable"),
+        ("solder", "NOUN:mass", "spool of"),
+        ("fiber optic cable", "NOUN:mass", "length of"),
+        ("thermal paste", "NOUN:mass", "dollop of"),
+        ("resistors", "NOUN:plural", "strip of"),
     ],
     "CRAFT_ITEM": [
-        ("solder joint", "countable"),
-        ("duck", "countable"),
-        ("cup of tea", "countable"),
-        ("crimp tool", "countable"),
-        ("component bag", "countable"),
-        ("soldering flux", "mass", "roll of"),
-        ("jumper wire", "countable"),
-        ("conductive thread", "mass", "bobbin of"),
-        ("club mate", "mass", "bottle of"),
-        ("hot glue", "mass", "stick of"),
-        ("felt", "mass", "sheet of"),
+        ("solder joint", "NOUN:countable"),
+        ("duck", "NOUN:countable"),
+        ("cup of tea", "NOUN:countable"),
+        ("crimp tool", "NOUN:countable"),
+        ("component bag", "NOUN:countable"),
+        ("soldering flux", "NOUN:mass", "roll of"),
+        ("jumper wire", "NOUN:countable"),
+        ("conductive thread", "NOUN:mass", "bobbin of"),
+        ("club mate", "NOUN:mass", "bottle of"),
+        ("hot glue", "NOUN:mass", "stick of"),
+        ("felt", "NOUN:mass", "sheet of"),
     ],
     "TECH_TRIVIA": [
         "solder joints",
@@ -422,108 +452,110 @@ TERMS = {
         "the ability to boil water",
     ],
     "VISIT_TYPE": [
-        "a walk around",
-        "an amble towards",
-        "a gentle stroll past",
-        "a quick run around",
-        "a late-night wander near",
-        "a brief march past",
-        "a session at",
-        "a visit to",
-        "a few drinks at",
+        ("a walk around", "walks around", "walking around", "walked around"),
+        ("an amble towards", "ambles towards", "ambling towards", "ambled towards"),
+        ("a gentle stroll past", "strolls past", "strolling past", "strolled past"),
+        ("a quick run around", "runs around", "running around", "ran around"),
+        ("a late-night wander near", "wanders near", "wandering near", "wandered near"),
+        ("a brief march past", "marches past", "marching past", "marched past"),
+        ("a session at", "sessions at", "sessioning at", "sessioned at"),
+        ("a visit to", "visits to", "visiting to", "visited to"),
+        ("a few drinks at", "drinks at", "drinking at", "drank at"),
     ],
     "CAMPING_ITEM": [
-        ("your socks", "mass"),
-        ("your sleeping bag", "mass"),
-        ("your airbed", "mass"),
-        ("your tent", "mass"),
-        ("your camping chair", "mass"),
-        ("your backpack", "mass"),
+        ("your socks", "NOUN:mass"),
+        ("your sleeping bag", "NOUN:mass"),
+        ("your airbed", "NOUN:mass"),
+        ("your tent", "NOUN:mass"),
+        ("your camping chair", "NOUN:mass"),
+        ("your backpack", "NOUN:mass"),
     ],
     "CAMPING_LOCATION": [
-        ("inside your socks", "mass"),
-        ("in the depth of your sleeping bag", "mass"),
-        ("in the bowels of your tent", "mass"),
-        ("in the queue for the showers", "mass"),
-        ("in the toilets", "mass"),
-        ("in the bar", "mass"),
-        ("in the info tent", "mass"),
+        ("inside your socks", "NOUN:mass"),
+        ("in the depth of your sleeping bag", "NOUN:mass"),
+        ("in the bowels of your tent", "NOUN:mass"),
+        ("in the queue for the showers", "NOUN:mass"),
+        ("in the toilets", "NOUN:mass"),
+        ("in the bar", "NOUN:mass"),
+        ("in the info tent", "NOUN:mass"),
     ],
     "FESTIVAL_INFRASTRUCTURE": [
-        ("the DECT phone system", "mass"),
-        ("the fibre backbone", "mass"),
-        ("stuck telehandler", "countable"),
-        ("stuck van", "countable"),
-        ("the Wi-Fi infrastructure", "mass"),
-        ("a soiled Datenklo", "mass"),
+        ("the DECT phone system", "NOUN:mass"),
+        ("the fibre backbone", "NOUN:mass"),
+        ("stuck telehandler", "NOUN:countable"),
+        ("stuck van", "NOUN:countable"),
+        ("the Wi-Fi infrastructure", "NOUN:mass"),
+        ("a soiled Datenklo", "NOUN:mass"),
     ],
 }
 
 UPBEAT_TEMPLATES = [
-    "{PEOPLE_SUBJECT} will {HACKER_ADVERB+SOCIAL_VERB} {CREATURE}.",
-    "Try {CAMP_ACTION_ACTIVE} at {DESTINATION}.",
-    "Your code will finally compile after {VISIT_TYPE} {MAP_LOCATION}.",
-    "{CREATURE_PLURAL_COLLECTIVE} riding {CREATURE_PLURAL} will bring great fortune to {VILLAGE}.",
-    "{PEOPLE_SUBJECT_COLLECTIVE} will {CAMP_ACTION} .",
-    "{VISIT_TYPE} {VILLAGE} will inspire you to {CAMP_ACTION}.",
-    "{CREATURE} will {SOCIAL_VERB+PEOPLE_SUBJECT} near {MAP_LOCATION}.",
-    "You will discover {CRAFT_ADJECTIVE+CRAFT_ITEM} while trying to {HACKER_ACTION}.",
-    "Your {ACTIVE_DEVICE} will flawlessly {COMPUTE_VERB} {COMPUTE_TARGET}.",
-    "While trying to {HACKER_ACTION} at {DESTINATION}, {ABSURD_OBJECT} will appear.",
-    "You will meet {PEOPLE_SUBJECT_COLLECTIVE} who will help you {HACKER_ACTION}.",
-    "To {CAMP_ACTION}, you must first find {TECH_ADJECTIVE+TECH_ITEM}.",
-    "To {CAMP_ACTION}, you must first obtain {CRAFT_ADJECTIVE+CRAFT_ITEM}.",
-    "If you {CAMP_ACTION} {TIME}, you might find {TECH_ADJECTIVE+TECH_ITEM}.",
-    "If you {CAMP_ACTION} {TIME}, you might create {CRAFT_ADJECTIVE+CRAFT_ITEM}.",
-    "A talk about {TECH_TRIVIA} will explain how to easily {HACKER_ACTION}.",
-    "You will find luck when you {COMPUTE_VERB} {COMPUTE_TARGET}.",
-    "Fortune awaits when you {HARDWARE_VERB} {HARDWARE_TARGET}.",
-    "{PEOPLE_SUBJECT} at {DESTINATION} will offer you {TECH_SHINY_ITEM} in exchange for debugging assistance.",
-    "Your {BENCH_TOOL} will work better near {VILLAGE}.",
-    "If you visit {DESTINATION} {TIME}, you might get to {CAMP_ACTION}.",
-    "{PEOPLE_SUBJECT} at {DESTINATION} will help you {HACKER_ACTION}.",
-    "To trade {TECH_RARE_ITEM} with {PEOPLE_SUBJECT}, you should visit {DESTINATION}.",
-    "A session at {VILLAGE} will teach you all about {TECH_TRIVIA}.",
-    "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {TECH_ADJECTIVE+TECH_ITEM}.",
-    "Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {CRAFT_ADJECTIVE+CRAFT_ITEM}.",
-    "A mysterious friendly signal at {DESTINATION} suggests you should immediately {CAMP_ACTION}.",
-    "You will spot Jonty fixing {FESTIVAL_INFRASTRUCTURE} using {CREATURE_PLURAL_COLLECTIVE}.",
-    "A mysterious firmware update signed by Jonty will grant your {ACTIVE_DEVICE} {SPECIAL_DEVICE_FEATURE}.",
-    "A ping on port 8081 {TIME} signals incoming {CREATURE_PLURAL}",
-    "Be on the lookout for {HARDWARE_TARGET} to {HARDWARE_VERB}",
-    "Quick! You should be {CAMP_ACTION_ACTIVE}",
-    "If you like {HARDWARE_TARGET}, check {CAMPING_LOCATION}.",
-    "If {CREATURE} makes eye contact, {HACKER_ACTION}.",
-    "If {PEOPLE_SUBJECT?mention|mentions} Jonty, change the topic.",
-    "If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.",
-    "If you see {PEOPLE_SUBJECT}, compliment their outfit.",
-    "If you see {HARDWARE_TARGET}, admire it from afar.",
-    "You will find fame and fortune {CAMPING_LOCATION}.",
-    "{CREATURE?are|is} not what they seem...",
-    "If {PEOPLE_SUBJECT?are coding late|is coding late}, make them some tea!."
+    ('You might see Jonty {TIME} {HARDWARE_VERB_ACTIVE} {FESTIVAL_INFRASTRUCTURE} using {CREATURE_PLURAL_COLLECTIVE}.', 9.055),
+    ('{TECH_ADJECTIVE+TECH_ITEM} gives your {ACTIVE_DEVICE} {SPECIAL_DEVICE_FEATURE}.', 10.567),
+    ('A mysterious firmware update signed by Kliment grants your Tildagon {SPECIAL_DEVICE_FEATURE}.', 29.43),
+    ('A ping on port 8081 {TIME} signals incoming {TECH_ADJECTIVE+CREATURE_PLURAL}', 12.489),
+    ('Be on the lookout for {HARDWARE_TARGET} to {HARDWARE_VERB}', 16.127),
+    ('Quick! You should be {CAMP_ACTION_ACTIVE}', 28.119),
+    ('If you like {HARDWARE_TARGET}, check {CAMPING_LOCATION}.', 16.127),
+    ('If {CREATURE} makes eye contact, {HACKER_ACTION}.', 16.023),
+    ('If {PEOPLE_SUBJECT?mention|mentions} Jonty, change the topic.', 24.048),
+    ('If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.', 19.56),
+    ('If you see {PEOPLE_SUBJECT}, compliment their outfit.', 24.048),
+    ('If you see {HARDWARE_TARGET}, admire it from afar.', 22.17),
+    ('You will find fame and fortune {CAMPING_LOCATION}.', 27.099),
+    ('{CREATURE?are|is} not what they seem...', 24.048),
+    ('If {PEOPLE_SUBJECT?are coding late|is coding late}, make them some tea!.', 24.048),
 ]
-
+DEFAULT_TEMPLATES = [
+    ('{PEOPLE_SUBJECT} will {HACKER_ADVERB+SOCIAL_VERB} {CREATURE}.', 9.879),
+    ('Try {CAMP_ACTION_ACTIVE} at {DESTINATION}.', 12.869),
+    ('Your code will finally compile after {VISIT_TYPE} {MAP_LOCATION}.', 15.466),
+    ('{CREATURE_PLURAL_COLLECTIVE} riding {CREATURE_PLURAL} will bring great fortune to {VILLAGE}.', 8.873),
+    ('{PEOPLE_SUBJECT_COLLECTIVE} will {CAMP_ACTION} .', 12.825),
+    ('{VISIT_TYPE} {VILLAGE} will inspire you to {CAMP_ACTION}.', 10.483),
+    ('{CREATURE} will {SOCIAL_VERB+PEOPLE_SUBJECT} near {MAP_LOCATION}.', 9.363),
+    ('You will discover {CRAFT_ADJECTIVE+CRAFT_ITEM} while trying to {HACKER_ACTION}.', 12.247),
+    ('Your {ACTIVE_DEVICE} will flawlessly {COMPUTE_VERB} {COMPUTE_TARGET}.', 13.018),
+    ('While trying to {HACKER_ACTION} at {DESTINATION}, {ABSURD_OBJECT} will appear.', 10.149),
+    ('You will meet {PEOPLE_SUBJECT_COLLECTIVE} who will help you {HACKER_ACTION}.', 12.014),
+    ('To {CAMP_ACTION}, you must first find {TECH_ADJECTIVE+TECH_ITEM}.', 12.608),
+    ('To {CAMP_ACTION}, you must first obtain {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 13.091),
+    ('If you {CAMP_ACTION} {TIME}, you might find {TECH_ADJECTIVE+TECH_ITEM}.', 9.911),
+    ('If you {CAMP_ACTION} {TIME}, you might create {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 10.207),
+    ('A talk about {TECH_TRIVIA} will explain how to easily {HACKER_ACTION}.', 16.023),
+    ('You will find luck when you {COMPUTE_VERB} {COMPUTE_TARGET}.', 16.691),
+    ('Fortune awaits when you {HARDWARE_VERB} {HARDWARE_TARGET}.', 16.127),
+    ('{PEOPLE_SUBJECT} at {DESTINATION} will offer you {TECH_SHINY_ITEM} in exchange for debugging assistance.', 9.564),
+    ('Your {BENCH_TOOL} will work better near {VILLAGE}.', 13.104),
+    ('If you visit {DESTINATION} {TIME}, you might get to {CAMP_ACTION}.', 10.071),
+    ('{PEOPLE_SUBJECT} at {DESTINATION} will help you {HACKER_ACTION}.', 9.564),
+    ('To trade {TECH_RARE_ITEM} with {PEOPLE_SUBJECT}, you should visit {DESTINATION}.', 9.564),
+    ('A session at {VILLAGE} will teach you all about {TECH_TRIVIA}.', 12.146),
+    ('Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {TECH_ADJECTIVE+TECH_ITEM}.', 11.719),
+    ('Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 12.134),
+    ('A mysterious friendly signal at {DESTINATION} suggests you should immediately {CAMP_ACTION}.', 12.869),
+]
 OMINOUS_TEMPLATES = [
-    "Beware of {HAZARD} when you {CAMP_ACTION}.",
-    "You will meet a new nemesis while trying to {HACKER_ACTION} at the {MAP_LOCATION}.",
-    "Beware of {CREATURE_PLURAL} bearing {SOCIAL_OBJECT}.",
-    "Beware of {CREATURE_PLURAL} near {DESTINATION}.",
-    "Your {ACTIVE_DEVICE} will detect high levels of {HAZARD} near {DESTINATION}.",
-    "To avoid {HAZARD}, you should quickly {CAMP_ACTION}.",
-    "You will accidentally drop your beloved {ACTIVE_DEVICE}. Butter fingers.",
-    "{TIME}, you will spend hours attempting to explain {TECH_TRIVIA} to {CREATURE}.",
-    "A mysterious flashing LED at {DESTINATION} is actually an ominous message about {TECH_TRIVIA}.",
-    "Your {ACTIVE_DEVICE} will fail due to {HAZARD}.",
-    "You will accidentally trade your {ACTIVE_DEVICE} for {TECH_ADJECTIVE+TECH_ITEM}.",
-    "You will accidentally trade your {ACTIVE_DEVICE} for {CRAFT_ADJECTIVE+CRAFT_ITEM}.",
-    "Beware of {CREATURE} trying to {COMPUTE_VERB} your unprotected {ACTIVE_DEVICE}.",
-    "Beware of {CREATURE} trying to {HARDWARE_VERB} your unguarded {ACTIVE_DEVICE}.",
-    "If you see {HAZARD} creeping around {DESTINATION}, take shelter at {MAP_LOCATION}.",
-    "If you see Jonty sprinting toward {DESTINATION}, do not ask questions. Do not follow him.",
-    "Jonty will challenge you to a game of chance behind {MAP_LOCATION}.",
-    "Beware of {HAZARD} when compiling code for {ACTIVE_DEVICE}.",
-    "{PEOPLE_SUBJECT} will {CAMP_ACTION} despite being advised not to.",
-    "Your {ACTIVE_DEVICE} will slowly begin to resent you for not {CAMP_ACTION_ACTIVE}"
+    ('Beware of {HAZARD} when you {CAMP_ACTION}.', 16.925),
+    ('You will meet a new nemesis while trying to {HACKER_ACTION} at the {MAP_LOCATION}.', 15.06),
+    ('Beware of {CREATURE_PLURAL} bearing {SOCIAL_OBJECT}.', 21.007),
+    ('Beware of {CREATURE_PLURAL} near {DESTINATION}.', 12.869),
+    ('Your {ACTIVE_DEVICE} will detect high levels of {HAZARD} near {DESTINATION}.', 9.75),
+    ('To avoid {HAZARD}, you should quickly {CAMP_ACTION}.', 16.925),
+    ('You will accidentally drop your beloved {ACTIVE_DEVICE}. Butter fingers.', 27.099),
+    ('{TIME}, you will spend hours attempting to explain {TECH_TRIVIA} to {CREATURE}.', 11.799),
+    ('A mysterious flashing LED at {DESTINATION} is actually an ominous message about {TECH_TRIVIA}.', 11.943),
+    ('Your {ACTIVE_DEVICE} will fail due to {HAZARD}.', 16.55),
+    ('You will accidentally trade your {ACTIVE_DEVICE} for {TECH_ADJECTIVE+TECH_ITEM}.', 12.399),
+    ('You will accidentally trade your {ACTIVE_DEVICE} for {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 12.865),
+    ('Beware of {CREATURE} trying to {COMPUTE_VERB} your unprotected {ACTIVE_DEVICE}.', 12.892),
+    ('Beware of {CREATURE} trying to {HARDWARE_VERB} your unguarded {ACTIVE_DEVICE}.', 13.265),
+    ('If you see {HAZARD} creeping around {DESTINATION}, take shelter at {MAP_LOCATION}.', 8.989),
+    ('If you see Jonty sprinting toward {DESTINATION}, do not ask questions. Do not follow him.', 16.092),
+    ('Jonty will challenge you to a game of chance behind {MAP_LOCATION}.', 21.942),
+    ('Beware of {HAZARD} when compiling code for {ACTIVE_DEVICE}.', 16.55),
+    ('{PEOPLE_SUBJECT} will {CAMP_ACTION} despite being advised not to.', 17.499),
+    ('Your {ACTIVE_DEVICE} will slowly begin to resent you for not {CAMP_ACTION_ACTIVE}', 19.06),
 ]
 
 def format_village(name, context_before):
@@ -627,10 +659,10 @@ def format_item(adjective, item, rng=None, add_collective=False):
         unit = item[2] if len(item) > 2 else None
     else:
         name = item
-        itype = "countable"
+        itype = "NOUN:countable"
         unit = None
 
-    if itype == "plural" and not unit and rng and add_collective:
+    if itype == "NOUN:plural" and not unit and rng and add_collective:
         if (rng.next_int() >> 8) % 2 == 0:
             unit = rng.choice(COLLECTIVE_PREFIXES)
 
@@ -645,31 +677,32 @@ def format_item(adjective, item, rng=None, add_collective=False):
             phrase = f"{adjective} {name}"
         else:
             phrase = name
-        if itype == "countable":
+        if itype == "NOUN:countable":
             return fix_a_an(f"a {phrase}")
         return phrase
 
 def _resolve_key(key):
     '''
-    Strip _PLURAL and/or _COLLECTIVE suffixes from a template placeholder key.
-    Returns (base_key, plural_only, add_collective).
-
-    add_collective=True  -> collective noun prefix may be randomly added (e.g. "a herd of")
-    add_collective=False -> plain form, no collective prefix
-    plural_only=True     -> filter TERMS list to only 'plural' typed entries
-
-    Examples:
-      "CREATURE"                   -> ("CREATURE", False, False)
+    Strip _PLURAL, _COLLECTIVE, _ACTIVE, and/or _PAST suffixes from a template placeholder key.
+    Returns (base_key, plural_only, add_collective, active_only, past_only).
     '''
     add_collective = False
     plural_only = False
+    active_only = False
+    past_only = False
     if key.endswith("_COLLECTIVE"):
         key = key[:-len("_COLLECTIVE")]
         add_collective = True
     if key.endswith("_PLURAL"):
         key = key[:-len("_PLURAL")]
         plural_only = True
-    return key, plural_only, add_collective
+    if key.endswith("_ACTIVE"):
+        key = key[:-len("_ACTIVE")]
+        active_only = True
+    if key.endswith("_PAST"):
+        key = key[:-len("_PAST")]
+        past_only = True
+    return key, plural_only, add_collective, active_only, past_only
 
 def is_preceded_by_modal(text, index):
     preceding = text[:index].rstrip()
@@ -682,7 +715,7 @@ def is_preceded_by_modal(text, index):
     return last_word in {"will", "would", "shall", "should", "can", "could", "may", "might", "must", "to"}
 
 # Noun-type markers recognised in TERMS tuple entries
-_NOUN_TYPES = ("countable", "plural", "mass")
+_NOUN_TYPES = ("NOUN:countable", "NOUN:plural", "NOUN:mass")
 
 def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=False):
     parts = chain_key.split("+")
@@ -691,14 +724,14 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
     pending_adjective = None
 
     for part in parts:
-        base_key, plural_only, add_coll = _resolve_key(part)
+        base_key, plural_only, add_coll, active_only, past_only = _resolve_key(part)
 
         if base_key not in TERMS:
             continue
 
         pool = TERMS[base_key]
         if plural_only:
-            pool = [e for e in pool if isinstance(e, tuple) and e[1] == "plural"]
+            pool = [e for e in pool if isinstance(e, tuple) and e[1] == "NOUN:plural"]
 
         choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
 
@@ -706,7 +739,7 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
             # Noun — format with article / collective prefix, apply pending adjective
             adj = pending_adjective or ""
             formatted = format_item(adj, choice, rng, add_collective=add_coll)
-            is_pl = (choice[1] == "plural" and not formatted.lower().startswith(("a ", "an ")))
+            is_pl = (choice[1] == "NOUN:plural" and not formatted.lower().startswith(("a ", "an ")))
             if subject_is_plural is None:
                 subject_is_plural = is_pl
                 active_plural[base_key] = is_pl
@@ -719,15 +752,19 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
             pending_adjective = None
         elif isinstance(choice, tuple):
             # Verb pair — pick form based on subject plurality or active_plural fallback
-            if force_infinitive:
-                is_pl = True
+            if active_only:
+                val = choice[2] if len(choice) > 2 else choice[0]
+            elif past_only:
+                val = choice[3] if len(choice) > 3 else choice[0]
+            elif force_infinitive:
+                val = choice[0]
             elif subject_is_plural is not None:
-                is_pl = subject_is_plural
+                val = choice[0] if subject_is_plural else choice[1]
             elif active_plural:
-                is_pl = list(active_plural.values())[-1]
+                val = choice[0] if list(active_plural.values())[-1] else choice[1]
             else:
-                is_pl = True
-            output_parts.append(choice[0] if is_pl else choice[1])
+                val = choice[0]
+            output_parts.append(val)
             pending_adjective = None
         else:
             # Plain string (adverb / adjective) — use as-is
@@ -751,9 +788,9 @@ def generate_fortune(seed_val):
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
-        template = rng.choice(UPBEAT_TEMPLATES)
+        template = rng.weighted_choice(UPBEAT_TEMPLATES)
     else:
-        template = rng.choice(OMINOUS_TEMPLATES)
+        template = rng.weighted_choice(OMINOUS_TEMPLATES)
         
     result = template
     used_terms = set()
@@ -803,23 +840,28 @@ def generate_fortune(seed_val):
                 force_inf = is_preceded_by_modal(result, idx)
                 choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
             else:
-                base_key, plural_only, add_coll = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
                         choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
-                        force_inf = is_preceded_by_modal(result, idx)
-                        if force_inf:
-                            choice = choice[0]
-                        elif active_plural:
-                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        if active_only:
+                            choice = choice[2] if len(choice) > 2 else choice[0]
+                        elif past_only:
+                            choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
-                            choice = choice[0]
+                            force_inf = is_preceded_by_modal(result, idx)
+                            if force_inf:
+                                choice = choice[0]
+                            elif active_plural:
+                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                            else:
+                                choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False  # plain string: use as-is
@@ -860,23 +902,28 @@ def generate_fortune(seed_val):
                 result = result[:idx] + choice + result[end_idx+1:]
                 i = idx + len(choice)
             else:
-                base_key, plural_only, add_coll = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
                         choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
-                        force_inf = is_preceded_by_modal(result, idx)
-                        if force_inf:
-                            choice = choice[0]
-                        elif active_plural:
-                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        if active_only:
+                            choice = choice[2] if len(choice) > 2 else choice[0]
+                        elif past_only:
+                            choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
-                            choice = choice[0]
+                            force_inf = is_preceded_by_modal(result, idx)
+                            if force_inf:
+                                choice = choice[0]
+                            elif active_plural:
+                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                            else:
+                                choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False  # plain string: use as-is
@@ -916,10 +963,10 @@ def generate_fortune_metadata(seed_val):
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
-        template = rng.choice(UPBEAT_TEMPLATES)
+        template = rng.weighted_choice(UPBEAT_TEMPLATES)
         vibe = "upbeat"
     else:
-        template = rng.choice(OMINOUS_TEMPLATES)
+        template = rng.weighted_choice(OMINOUS_TEMPLATES)
         vibe = "ominous"
         
     tokens = [{"type": "text", "value": template}]
@@ -976,19 +1023,30 @@ def generate_fortune_metadata(seed_val):
                 new_tokens.append({"type": "text", "value": suffix_val + right_text})
                 tokens[token_idx:token_idx+1] = new_tokens
             else:
-                base_key, plural_only, add_coll = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
                         choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
-                        choice = choice[0]
+                        if active_only:
+                            choice = choice[2] if len(choice) > 2 else choice[0]
+                        elif past_only:
+                            choice = choice[3] if len(choice) > 3 else choice[0]
+                        else:
+                            force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
+                            if force_inf:
+                                choice = choice[0]
+                            elif active_plural:
+                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                            else:
+                                choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False
@@ -1069,19 +1127,30 @@ def generate_fortune_metadata(seed_val):
                     new_tokens.append({"type": "text", "value": right_text})
                 tokens[token_idx:token_idx+1] = new_tokens
             else:
-                base_key, plural_only, add_coll = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
                         choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
-                        choice = choice[0]
+                        if active_only:
+                            choice = choice[2] if len(choice) > 2 else choice[0]
+                        elif past_only:
+                            choice = choice[3] if len(choice) > 3 else choice[0]
+                        else:
+                            force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
+                            if force_inf:
+                                choice = choice[0]
+                            elif active_plural:
+                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                            else:
+                                choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False

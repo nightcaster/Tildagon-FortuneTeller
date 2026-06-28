@@ -220,6 +220,21 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
                 f.write("        if not lst:\n")
                 f.write("            return None\n")
                 f.write("        return lst[self.next_int() % len(lst)]\n\n")
+                f.write("    def weighted_choice(self, lst):\n")
+                f.write("        if not lst:\n")
+                f.write("            return None\n")
+                f.write("        total_weight = 0.0\n")
+                f.write("        for item, weight in lst:\n")
+                f.write("            total_weight += weight\n")
+                f.write("        if total_weight <= 0:\n")
+                f.write("            return lst[0][0]\n")
+                f.write("        r = (self.next_int() / 2147483647.0) * total_weight\n")
+                f.write("        running = 0.0\n")
+                f.write("        for item, weight in lst:\n")
+                f.write("            running += weight\n")
+                f.write("            if r <= running:\n")
+                f.write("                return item[0] if isinstance(item, (list, tuple)) else item\n")
+                f.write("        return lst[-1][0]\n\n")
                 
                 f.write(f"MAP_LOCATIONS = {json.dumps(map_locations, indent=4)}\n\n")
                 f.write(f"VILLAGES = {json.dumps(villages, indent=4)}\n\n")
@@ -242,8 +257,20 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
                     f.write("    ],\n")
                 f.write("}\n\n")
                 
-                f.write(f"UPBEAT_TEMPLATES = {json.dumps(upbeat_templates, indent=4)}\n\n")
-                f.write(f"OMINOUS_TEMPLATES = {json.dumps(ominous_templates, indent=4)}\n\n")
+                def format_templates(name, templates_list):
+                    lines = [f"{name} = ["]
+                    for t in templates_list:
+                        if isinstance(t, list) and len(t) == 2:
+                            lines.append(f"    ({json.dumps(t[0])}, {t[1]}),")
+                        else:
+                            lines.append(f"    ({json.dumps(t)}, 1.0),")
+                    lines.append("]\n")
+                    return "\n".join(lines)
+                
+                f.write(format_templates("UPBEAT_TEMPLATES", upbeat_templates))
+                f.write("\n")
+                f.write(format_templates("OMINOUS_TEMPLATES", ominous_templates))
+                f.write("\n")
                 f.write(r"""def format_village(name, context_before):
     name_lower = name.lower().strip()
     proper_noun_exceptions = {"milliways", "bodgeham-on-wye", "glastonledburyshire-on-severn", "sheffield-by-the-sea"}
@@ -345,10 +372,10 @@ def format_item(adjective, item, rng=None, add_collective=False):
         unit = item[2] if len(item) > 2 else None
     else:
         name = item
-        itype = "countable"
+        itype = "NOUN:countable"
         unit = None
 
-    if itype == "plural" and not unit and rng and add_collective:
+    if itype == "NOUN:plural" and not unit and rng and add_collective:
         if (rng.next_int() >> 8) % 2 == 0:
             unit = rng.choice(COLLECTIVE_PREFIXES)
 
@@ -363,31 +390,28 @@ def format_item(adjective, item, rng=None, add_collective=False):
             phrase = f"{adjective} {name}"
         else:
             phrase = name
-        if itype == "countable":
+        if itype == "NOUN:countable":
             return fix_a_an(f"a {phrase}")
         return phrase
 
 def _resolve_key(key):
     '''
-    Strip _PLURAL and/or _COLLECTIVE suffixes from a template placeholder key.
-    Returns (base_key, plural_only, add_collective).
-
-    add_collective=True  -> collective noun prefix may be randomly added (e.g. "a herd of")
-    add_collective=False -> plain form, no collective prefix
-    plural_only=True     -> filter TERMS list to only 'plural' typed entries
-
-    Examples:
-      "CREATURE"                   -> ("CREATURE", False, False)
+    Strip _PLURAL, _COLLECTIVE, and/or _ACTIVE suffixes from a template placeholder key.
+    Returns (base_key, plural_only, add_collective, active_only).
     '''
     add_collective = False
     plural_only = False
+    active_only = False
     if key.endswith("_COLLECTIVE"):
         key = key[:-len("_COLLECTIVE")]
         add_collective = True
     if key.endswith("_PLURAL"):
         key = key[:-len("_PLURAL")]
         plural_only = True
-    return key, plural_only, add_collective
+    if key.endswith("_ACTIVE"):
+        key = key[:-len("_ACTIVE")]
+        active_only = True
+    return key, plural_only, add_collective, active_only
 
 def is_preceded_by_modal(text, index):
     preceding = text[:index].rstrip()
@@ -400,7 +424,7 @@ def is_preceded_by_modal(text, index):
     return last_word in {"will", "would", "shall", "should", "can", "could", "may", "might", "must", "to"}
 
 # Noun-type markers recognised in TERMS tuple entries
-_NOUN_TYPES = ("countable", "plural", "mass")
+_NOUN_TYPES = ("NOUN:countable", "NOUN:plural", "NOUN:mass")
 
 def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=False):
     parts = chain_key.split("+")
@@ -409,14 +433,14 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
     pending_adjective = None
 
     for part in parts:
-        base_key, plural_only, add_coll = _resolve_key(part)
+        base_key, plural_only, add_coll, active_only = _resolve_key(part)
 
         if base_key not in TERMS:
             continue
 
         pool = TERMS[base_key]
         if plural_only:
-            pool = [e for e in pool if isinstance(e, tuple) and e[1] == "plural"]
+            pool = [e for e in pool if isinstance(e, tuple) and e[1] == "NOUN:plural"]
 
         choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
 
@@ -424,7 +448,7 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
             # Noun — format with article / collective prefix, apply pending adjective
             adj = pending_adjective or ""
             formatted = format_item(adj, choice, rng, add_collective=add_coll)
-            is_pl = (choice[1] == "plural" and not formatted.lower().startswith(("a ", "an ")))
+            is_pl = (choice[1] == "NOUN:plural" and not formatted.lower().startswith(("a ", "an ")))
             if subject_is_plural is None:
                 subject_is_plural = is_pl
                 active_plural[base_key] = is_pl
@@ -437,15 +461,17 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
             pending_adjective = None
         elif isinstance(choice, tuple):
             # Verb pair — pick form based on subject plurality or active_plural fallback
-            if force_infinitive:
-                is_pl = True
+            if active_only:
+                val = choice[2] if len(choice) > 2 else choice[0]
+            elif force_infinitive:
+                val = choice[0]
             elif subject_is_plural is not None:
-                is_pl = subject_is_plural
+                val = choice[0] if subject_is_plural else choice[1]
             elif active_plural:
-                is_pl = list(active_plural.values())[-1]
+                val = choice[0] if list(active_plural.values())[-1] else choice[1]
             else:
-                is_pl = True
-            output_parts.append(choice[0] if is_pl else choice[1])
+                val = choice[0]
+            output_parts.append(val)
             pending_adjective = None
         else:
             # Plain string (adverb / adjective) — use as-is
@@ -469,9 +495,9 @@ def generate_fortune(seed_val):
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
-        template = rng.choice(UPBEAT_TEMPLATES)
+        template = rng.weighted_choice(UPBEAT_TEMPLATES)
     else:
-        template = rng.choice(OMINOUS_TEMPLATES)
+        template = rng.weighted_choice(OMINOUS_TEMPLATES)
         
     result = template
     used_terms = set()
@@ -521,23 +547,26 @@ def generate_fortune(seed_val):
                 force_inf = is_preceded_by_modal(result, idx)
                 choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
             else:
-                base_key, plural_only, add_coll = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
                         choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
-                        force_inf = is_preceded_by_modal(result, idx)
-                        if force_inf:
-                            choice = choice[0]
-                        elif active_plural:
-                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        if active_only:
+                            choice = choice[2] if len(choice) > 2 else choice[0]
                         else:
-                            choice = choice[0]
+                            force_inf = is_preceded_by_modal(result, idx)
+                            if force_inf:
+                                choice = choice[0]
+                            elif active_plural:
+                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                            else:
+                                choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False  # plain string: use as-is
@@ -578,23 +607,26 @@ def generate_fortune(seed_val):
                 result = result[:idx] + choice + result[end_idx+1:]
                 i = idx + len(choice)
             else:
-                base_key, plural_only, add_coll = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
                         choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
-                        force_inf = is_preceded_by_modal(result, idx)
-                        if force_inf:
-                            choice = choice[0]
-                        elif active_plural:
-                            choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                        if active_only:
+                            choice = choice[2] if len(choice) > 2 else choice[0]
                         else:
-                            choice = choice[0]
+                            force_inf = is_preceded_by_modal(result, idx)
+                            if force_inf:
+                                choice = choice[0]
+                            elif active_plural:
+                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                            else:
+                                choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False  # plain string: use as-is
@@ -634,10 +666,10 @@ def generate_fortune_metadata(seed_val):
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
-        template = rng.choice(UPBEAT_TEMPLATES)
+        template = rng.weighted_choice(UPBEAT_TEMPLATES)
         vibe = "upbeat"
     else:
-        template = rng.choice(OMINOUS_TEMPLATES)
+        template = rng.weighted_choice(OMINOUS_TEMPLATES)
         vibe = "ominous"
         
     tokens = [{"type": "text", "value": template}]
@@ -694,19 +726,28 @@ def generate_fortune_metadata(seed_val):
                 new_tokens.append({"type": "text", "value": suffix_val + right_text})
                 tokens[token_idx:token_idx+1] = new_tokens
             else:
-                base_key, plural_only, add_coll = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
                         choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
-                        choice = choice[0]
+                        if active_only:
+                            choice = choice[2] if len(choice) > 2 else choice[0]
+                        else:
+                            force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
+                            if force_inf:
+                                choice = choice[0]
+                            elif active_plural:
+                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                            else:
+                                choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False
@@ -787,19 +828,28 @@ def generate_fortune_metadata(seed_val):
                     new_tokens.append({"type": "text", "value": right_text})
                 tokens[token_idx:token_idx+1] = new_tokens
             else:
-                base_key, plural_only, add_coll = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "plural")]
+                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
                         choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "plural" and not choice.lower().startswith(("a ", "an ")))
+                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
-                        choice = choice[0]
+                        if active_only:
+                            choice = choice[2] if len(choice) > 2 else choice[0]
+                        else:
+                            force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
+                            if force_inf:
+                                choice = choice[0]
+                            elif active_plural:
+                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
+                            else:
+                                choice = choice[0]
                         is_plural = False
                     else:
                         is_plural = False
@@ -2102,9 +2152,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <div id="term-modal-props-group" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
                         <span style="font-size: 0.8rem; color: var(--text-secondary);">Type:</span>
                         <select id="term-modal-type-select" class="input-control" style="width: 120px; padding: 0.4rem 0.6rem;">
-                            <option value="countable">Countable</option>
-                            <option value="plural">Plural</option>
-                            <option value="mass">Mass Noun</option>
+                            <option value="NOUN:countable">Countable</option>
+                            <option value="NOUN:plural">Plural</option>
+                            <option value="NOUN:mass">Mass Noun</option>
                         </select>
                         <span style="font-size: 0.8rem; color: var(--text-secondary);">Unit/Prefix:</span>
                         <input type="text" id="term-modal-unit-input" class="input-control" placeholder="Unit (e.g. bottle of)" style="flex-grow: 1; padding: 0.4rem 0.6rem;">
@@ -2120,9 +2170,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <div id="term-modal-add-props-group" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center;">
                         <span style="font-size: 0.8rem; color: var(--text-secondary);">Type:</span>
                         <select id="term-modal-add-type-select" class="input-control" style="width: 120px; padding: 0.4rem 0.6rem;">
-                            <option value="countable">Countable</option>
-                            <option value="plural">Plural</option>
-                            <option value="mass">Mass Noun</option>
+                            <option value="NOUN:countable">Countable</option>
+                            <option value="NOUN:plural">Plural</option>
+                            <option value="NOUN:mass">Mass Noun</option>
                         </select>
                         <span style="font-size: 0.8rem; color: var(--text-secondary);">Unit/Prefix:</span>
                         <input type="text" id="term-modal-add-unit-input" class="input-control" placeholder="Unit (e.g. bottle of)" style="flex-grow: 1; padding: 0.4rem 0.6rem;">
@@ -2295,7 +2345,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 elDirectLookupResult.innerText = "No templates loaded yet.";
                 return;
             }
-            const template = rng.choice(templateList);
+            const template = rng.weightedChoice(templateList);
             const fortune = generateFortuneJS(template, rng);
             elDirectLookupResult.style.display = 'block';
             elDirectLookupResult.style.color = 'var(--accent-cyan)';
@@ -2707,7 +2757,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             
             // Find template and its index
             const tplList = (vibe === 'upbeat') ? config.UPBEAT_TEMPLATES : config.OMINOUS_TEMPLATES;
-            const idx = tplList.indexOf(templateText);
+            const idx = tplList.findIndex(t => (Array.isArray(t) ? t[0] : t) === templateText);
             if (idx === -1) return;
             
             // Wait for DOM to render list items
@@ -2746,6 +2796,30 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 if (!lst || lst.length === 0) return null;
                 return lst[this.nextInt() % lst.length];
             }
+            weightedChoice(lst) {
+                if (!lst || lst.length === 0) return null;
+                let totalWeight = 0.0;
+                for (let i = 0; i < lst.length; i++) {
+                    const item = lst[i];
+                    totalWeight += Array.isArray(item) ? item[1] : 1.0;
+                }
+                if (totalWeight <= 0) {
+                    const first = lst[0];
+                    return Array.isArray(first) ? first[0] : first;
+                }
+                const r = (this.nextInt() / 2147483647.0) * totalWeight;
+                let running = 0.0;
+                for (let i = 0; i < lst.length; i++) {
+                    const item = lst[i];
+                    const weight = Array.isArray(item) ? item[1] : 1.0;
+                    running += weight;
+                    if (r <= running) {
+                        return Array.isArray(item) ? item[0] : item;
+                    }
+                }
+                const last = lst[lst.length - 1];
+                return Array.isArray(last) ? last[0] : last;
+            }
         }
 
         function chooseUniqueJS(rng, values, usedTerms) {
@@ -2763,6 +2837,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         function _resolveKeyJS(key) {
             let addCollective = false;
             let pluralOnly = false;
+            let activeOnly = false;
+            let pastOnly = false;
             if (key.endsWith("_COLLECTIVE")) {
                 key = key.substring(0, key.length - "_COLLECTIVE".length);
                 addCollective = true;
@@ -2771,7 +2847,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 key = key.substring(0, key.length - "_PLURAL".length);
                 pluralOnly = true;
             }
-            return { baseKey: key, pluralOnly, addCollective };
+            if (key.endsWith("_ACTIVE")) {
+                key = key.substring(0, key.length - "_ACTIVE".length);
+                activeOnly = true;
+            }
+            if (key.endsWith("_PAST")) {
+                key = key.substring(0, key.length - "_PAST".length);
+                pastOnly = true;
+            }
+            return { baseKey: key, pluralOnly, addCollective, activeOnly, pastOnly };
         }
 
         function isPrecededByModalJS(text, index) {
@@ -2790,21 +2874,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             let pendingAdjective = null;
 
             for (const part of parts) {
-                const { baseKey, pluralOnly, addCollective } = _resolveKeyJS(part);
+                const { baseKey, pluralOnly, addCollective, activeOnly, pastOnly } = _resolveKeyJS(part);
                 const values = getOptionsListForKey(baseKey);
                 if (!values || values.length === 0) continue;
 
                 let pool = values;
                 if (pluralOnly) {
-                    pool = values.filter(e => Array.isArray(e) && e[1] === "plural");
+                    pool = values.filter(e => Array.isArray(e) && e[1] === "NOUN:plural");
                 }
 
                 const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
 
-                if (Array.isArray(choice) && ["countable", "plural", "mass"].includes(choice[1])) {
+                if (Array.isArray(choice) && ["NOUN:countable", "NOUN:plural", "NOUN:mass"].includes(choice[1])) {
                     const adj = pendingAdjective || "";
                     const formatted = formatItemJS(adj, choice, rng, !addCollective);
-                    const isPl = (choice[1] === "plural" && !formatted.toLowerCase().startsWith("a ") && !formatted.toLowerCase().startsWith("an "));
+                    const isPl = (choice[1] === "NOUN:plural" && !formatted.toLowerCase().startsWith("a ") && !formatted.toLowerCase().startsWith("an "));
                     if (subjectIsPlural === null) {
                         subjectIsPlural = isPl;
                         activePlural[baseKey] = isPl;
@@ -2819,19 +2903,27 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 } else if (Array.isArray(choice)) {
                     // Verb pair
                     let isPl;
-                    if (forceInfinitive) {
-                        isPl = true;
-                    } else if (subjectIsPlural !== null) {
-                        isPl = subjectIsPlural;
+                    let val;
+                    if (activeOnly) {
+                        val = choice[2] || choice[0];
+                    } else if (pastOnly) {
+                        val = choice[3] || choice[0];
                     } else {
-                        const keys = Object.keys(activePlural);
-                        if (keys.length > 0) {
-                            isPl = activePlural[keys[keys.length - 1]];
-                        } else {
+                        if (forceInfinitive) {
                             isPl = true;
+                        } else if (subjectIsPlural !== null) {
+                            isPl = subjectIsPlural;
+                        } else {
+                            const keys = Object.keys(activePlural);
+                            if (keys.length > 0) {
+                                isPl = activePlural[keys[keys.length - 1]];
+                            } else {
+                                isPl = true;
+                            }
                         }
+                        val = isPl ? choice[0] : choice[1];
                     }
-                    outputParts.push(isPl ? choice[0] : choice[1]);
+                    outputParts.push(val);
                     pendingAdjective = null;
                 } else {
                     outputParts.push(choice);
@@ -2903,31 +2995,37 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         displayVal = resolved.choice;
                         isPlural = resolved.isPlural;
                     } else {
-                        const { baseKey, pluralOnly, addCollective } = _resolveKeyJS(key);
+                        const { baseKey, pluralOnly, addCollective, activeOnly, pastOnly } = _resolveKeyJS(key);
                         const values = getOptionsListForKey(baseKey);
                         if (values && values.length > 0) {
                             let pool = values;
                             if (pluralOnly) {
-                                pool = values.filter(e => Array.isArray(e) && e[1] === "plural");
+                                pool = values.filter(e => Array.isArray(e) && e[1] === "NOUN:plural");
                             }
                             const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
                             displayVal = choice;
                             isPlural = false;
                             if (baseKey === 'VILLAGE' || (baseKey === 'DESTINATION' && config.VILLAGES.includes(choice))) {
                                 displayVal = formatVillageJS(choice);
-                            } else if (Array.isArray(choice) && ["countable", "plural", "mass"].includes(choice[1])) {
+                            } else if (Array.isArray(choice) && ["NOUN:countable", "NOUN:plural", "NOUN:mass"].includes(choice[1])) {
                                 const itype = choice[1];
                                 displayVal = formatItemJS("", choice, rng, !addCollective);
-                                isPlural = (itype === 'plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
+                                isPlural = (itype === 'NOUN:plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
                             } else if (Array.isArray(choice)) {
                                 // Verb pair
-                                const forceInf = isPrecededByModalJS(result, idx);
-                                if (forceInf) {
-                                    displayVal = choice[0];
+                                if (activeOnly) {
+                                    displayVal = choice[2] || choice[0];
+                                } else if (pastOnly) {
+                                    displayVal = choice[3] || choice[0];
                                 } else {
-                                    const keys = Object.keys(activePlural);
-                                    const lastPl = keys.length > 0 ? activePlural[keys[keys.length - 1]] : true;
-                                    displayVal = lastPl ? choice[0] : choice[1];
+                                    const forceInf = isPrecededByModalJS(result, idx);
+                                    if (forceInf) {
+                                        displayVal = choice[0];
+                                    } else {
+                                        const keys = Object.keys(activePlural);
+                                        const lastPl = keys.length > 0 ? activePlural[keys[keys.length - 1]] : true;
+                                        displayVal = lastPl ? choice[0] : choice[1];
+                                    }
                                 }
                                 isPlural = false;
                             } else {
@@ -2970,31 +3068,37 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         result = result.substring(0, idx) + resolved.choice + result.substring(endIdx + 1);
                         i = idx + resolved.choice.length;
                     } else {
-                        const { baseKey, pluralOnly, addCollective } = _resolveKeyJS(key);
+                        const { baseKey, pluralOnly, addCollective, activeOnly, pastOnly } = _resolveKeyJS(key);
                         const values = getOptionsListForKey(baseKey);
                         if (values && values.length > 0) {
                             let pool = values;
                             if (pluralOnly) {
-                                pool = values.filter(e => Array.isArray(e) && e[1] === "plural");
+                                pool = values.filter(e => Array.isArray(e) && e[1] === "NOUN:plural");
                             }
                             const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
                             let displayVal = choice;
                             let isPlural = false;
                             if (baseKey === 'VILLAGE' || (baseKey === 'DESTINATION' && config.VILLAGES.includes(choice))) {
                                 displayVal = formatVillageJS(choice);
-                            } else if (Array.isArray(choice) && ["countable", "plural", "mass"].includes(choice[1])) {
+                            } else if (Array.isArray(choice) && ["NOUN:countable", "NOUN:plural", "NOUN:mass"].includes(choice[1])) {
                                 const itype = choice[1];
                                 displayVal = formatItemJS("", choice, rng, !addCollective);
-                                isPlural = (itype === 'plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
+                                isPlural = (itype === 'NOUN:plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
                             } else if (Array.isArray(choice)) {
                                 // Verb pair
-                                const forceInf = isPrecededByModalJS(result, idx);
-                                if (forceInf) {
-                                    displayVal = choice[0];
+                                if (activeOnly) {
+                                    displayVal = choice[2] || choice[0];
+                                } else if (pastOnly) {
+                                    displayVal = choice[3] || choice[0];
                                 } else {
-                                    const keys = Object.keys(activePlural);
-                                    const lastPl = keys.length > 0 ? activePlural[keys[keys.length - 1]] : true;
-                                    displayVal = lastPl ? choice[0] : choice[1];
+                                    const forceInf = isPrecededByModalJS(result, idx);
+                                    if (forceInf) {
+                                        displayVal = choice[0];
+                                    } else {
+                                        const keys = Object.keys(activePlural);
+                                        const lastPl = keys.length > 0 ? activePlural[keys[keys.length - 1]] : true;
+                                        displayVal = lastPl ? choice[0] : choice[1];
+                                    }
                                 }
                                 isPlural = false;
                             } else {
@@ -3307,10 +3411,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 const targetList = getTargetStateList(key);
                 const foundItem = targetList.find(item => (Array.isArray(item) ? item[0] : item) === rawVal);
                 if (Array.isArray(foundItem)) {
-                    elTermModalTypeSelect.value = foundItem[1] || 'countable';
+                    elTermModalTypeSelect.value = foundItem[1] || 'NOUN:countable';
                     elTermModalUnitInput.value = foundItem[2] || '';
                 } else {
-                    elTermModalTypeSelect.value = 'countable';
+                    elTermModalTypeSelect.value = 'NOUN:countable';
                     elTermModalUnitInput.value = '';
                 }
             } else {
@@ -3353,11 +3457,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 unit = item.length > 2 ? item[2] : null;
             } else {
                 name = item;
-                itype = "countable";
+                itype = "NOUN:countable";
                 unit = null;
             }
 
-            if (itype === "plural" && !unit && !noCollective) {
+            if (itype === "NOUN:plural" && !unit && !noCollective) {
                 if (rng) {
                     if (((rng.nextInt() >> 8) % 2) === 0) {
                         unit = rng.choice(COLLECTIVE_PREFIXES_JS);
@@ -3372,7 +3476,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 return fixAAnJS(`a ${phrase}`);
             } else {
                 let phrase = adjective ? `${adjective} ${name}` : `${name}`;
-                if (itype === "countable") {
+                if (itype === "NOUN:countable") {
                     return fixAAnJS(`a ${phrase}`);
                 }
                 return phrase;
@@ -3522,9 +3626,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     }
                 }
                 let tplList = (activeModalVibe === 'upbeat') ? config.UPBEAT_TEMPLATES : config.OMINOUS_TEMPLATES;
-                let tplIdx = tplList.indexOf(activeModalTemplate);
+                let tplIdx = tplList.findIndex(t => (Array.isArray(t) ? t[0] : t) === activeModalTemplate);
                 if (tplIdx !== -1) {
-                    tplList[tplIdx] = replaceNthPlaceholder(activeModalTemplate, termOccurrenceIdx, newCategory);
+                    const currentTpl = tplList[tplIdx];
+                    const newTplStr = replaceNthPlaceholder(activeModalTemplate, termOccurrenceIdx, newCategory);
+                    if (Array.isArray(currentTpl)) {
+                        tplList[tplIdx] = [newTplStr, currentTpl[1]];
+                    } else {
+                        tplList[tplIdx] = [newTplStr, 1.0];
+                    }
                 }
                 
                 // Add the custom value to the new category list if it's new
@@ -3695,21 +3805,23 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             list.forEach((term, idx) => {
                 const isArr = Array.isArray(term);
+                const isNoun = isArr && (typeof term[1] === 'string' && term[1].startsWith('NOUN:'));
+                const isVerb = isArr && !isNoun;
                 const termName = isArr ? term[0] : term;
                 const row = document.createElement('div');
                 row.className = 'dict-term-editable';
                 
-                if (isArr) {
-                    const type = term[1] || 'countable';
+                if (isNoun) {
+                    const type = term[1] || 'NOUN:countable';
                     const unit = term[2] || '';
                     row.innerHTML = `
                         <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Term:</span>
                         <input type="text" class="dict-term-input input-control" value="${escapeHtml(termName)}" style="flex-grow: 1;">
                         <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Type:</span>
                         <select class="dict-term-type input-control" style="width: 120px; padding: 0.25rem 0.5rem; font-size: 0.85rem;">
-                            <option value="countable" ${type === 'countable' ? 'selected' : ''}>Countable</option>
-                            <option value="plural" ${type === 'plural' ? 'selected' : ''}>Plural</option>
-                            <option value="mass" ${type === 'mass' ? 'selected' : ''}>Mass Noun</option>
+                            <option value="NOUN:countable" ${type === 'NOUN:countable' ? 'selected' : ''}>Countable</option>
+                            <option value="NOUN:plural" ${type === 'NOUN:plural' ? 'selected' : ''}>Plural</option>
+                            <option value="NOUN:mass" ${type === 'NOUN:mass' ? 'selected' : ''}>Mass Noun</option>
                         </select>
                         <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Unit/Prefix:</span>
                         <input type="text" class="dict-term-unit input-control" placeholder="E.g. bottle of" value="${escapeHtml(unit)}" style="width: 150px; padding: 0.25rem 0.5rem; font-size: 0.85rem;">
@@ -3735,6 +3847,42 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     input.addEventListener('change', updateProps);
                     select.addEventListener('change', updateProps);
                     unitInput.addEventListener('change', updateProps);
+                } else if (isVerb) {
+                    const base = term[0] || '';
+                    const singular = term[1] || '';
+                    const continuous = term[2] || '';
+                    const past = term[3] || '';
+                    row.innerHTML = `
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Base:</span>
+                        <input type="text" class="dict-verb-base input-control" value="${escapeHtml(base)}" style="width: 120px;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Singular:</span>
+                        <input type="text" class="dict-verb-singular input-control" value="${escapeHtml(singular)}" style="width: 120px;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Continuous:</span>
+                        <input type="text" class="dict-verb-continuous input-control" value="${escapeHtml(continuous)}" style="width: 120px;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Past:</span>
+                        <input type="text" class="dict-verb-past input-control" value="${escapeHtml(past)}" style="width: 120px;">
+                        <button class="dict-term-del btn" style="padding: 0.35rem 0.60rem; background: rgba(255, 70, 70, 0.15); border-color: rgba(255, 70, 70, 0.25); color: rgb(255, 100, 100); font-weight: bold; font-size: 0.95rem;">&times;</button>
+                    `;
+                    
+                    const inputBase = row.querySelector('.dict-verb-base');
+                    const inputSingular = row.querySelector('.dict-verb-singular');
+                    const inputContinuous = row.querySelector('.dict-verb-continuous');
+                    const inputPast = row.querySelector('.dict-verb-past');
+                    
+                    const updateProps = () => {
+                        list[idx] = [
+                            inputBase.value.trim(),
+                            inputSingular.value.trim(),
+                            inputContinuous.value.trim(),
+                            inputPast.value.trim()
+                        ];
+                        updateTotalFortunesCount();
+                    };
+                    
+                    inputBase.addEventListener('change', updateProps);
+                    inputSingular.addEventListener('change', updateProps);
+                    inputContinuous.addEventListener('change', updateProps);
+                    inputPast.addEventListener('change', updateProps);
                 } else {
                     row.innerHTML = `
                         <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Term:</span>
@@ -3769,14 +3917,22 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 if (val) {
                     const exists = list.some(item => (Array.isArray(item) ? item[0] : item) === val);
                     if (!exists) {
-                        const isTupleCategory = [
+                        if (list.length > 0 && Array.isArray(list[0])) {
+                            const firstItem = list[0];
+                            const isFirstNoun = typeof firstItem[1] === 'string' && firstItem[1].startsWith('NOUN:');
+                            if (isFirstNoun) {
+                                list.push([val, "NOUN:countable"]);
+                            } else {
+                                list.push([val, val + "s", val + "ing", val + "ed"]);
+                            }
+                        } else if ([
                             'PEOPLE_SUBJECT', 'CREATURE_SUBJECT', 'ACTIVE_DEVICE', 
                             'BENCH_TOOL', 'SOCIAL_OBJECT', 'ABSURD_OBJECT', 
-                            'TECH_ITEM', 'CRAFT_ITEM'
-                        ].includes(key) || (list.length > 0 && Array.isArray(list[0]));
-                        
-                        if (isTupleCategory) {
-                            list.push([val, "countable"]);
+                            'TECH_ITEM', 'CRAFT_ITEM', 'COMPUTE_TARGET', 'HARDWARE_TARGET'
+                        ].includes(key)) {
+                            list.push([val, "NOUN:countable"]);
+                        } else if (key.endsWith('VERB') || key === 'CAMP_ACTION' || key === 'VISIT_TYPE') {
+                            list.push([val, val + "s", val + "ing", val + "ed"]);
                         } else {
                             list.push(val);
                         }
@@ -3800,6 +3956,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         function renderTemplateList(templates, elTargetList, type) {
             elTargetList.innerHTML = '';
             templates.forEach((tpl, idx) => {
+                const isTuple = Array.isArray(tpl);
+                const tplStr = isTuple ? tpl[0] : tpl;
+                const tplWeight = isTuple ? tpl[1] : 1.0;
+
                 const row = document.createElement('div');
                 row.className = 'template-item-row';
                 row.id = `template-item-${type}-${idx}`;
@@ -3810,22 +3970,33 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 row.innerHTML = `
                     <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
                         <span style="font-family: var(--font-display); font-size: 0.8rem; opacity: 0.6; min-width: 20px; margin-top: 0.4rem;">#${idx+1}</span>
-                        <textarea class="template-textarea" data-index="${idx}" style="min-height: 70px; flex-grow: 1; padding: 0.5rem; font-size: 0.9rem; line-height: 1.4; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; background: rgba(0,0,0,0.2);">${escapeHtml(tpl)}</textarea>
+                        <textarea class="template-textarea" data-index="${idx}" style="min-height: 70px; flex-grow: 1; padding: 0.5rem; font-size: 0.9rem; line-height: 1.4; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; background: rgba(0,0,0,0.2);">${escapeHtml(tplStr)}</textarea>
                     </div>
-                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem; padding-left: 28px;">
-                        <button class="btn btn-preview" style="padding: 0.25rem 0.6rem; font-size: 0.8rem; background: rgba(0, 240, 255, 0.1); border-color: rgba(0, 240, 255, 0.25); color: var(--accent-cyan);" data-index="${idx}">🔮 Preview 100</button>
-                        <button class="btn btn-delete" style="padding: 0.25rem 0.6rem; font-size: 0.8rem; background: rgba(255, 70, 70, 0.1); border-color: rgba(255, 70, 70, 0.25); color: rgb(255, 100, 100);" data-index="${idx}">Remove</button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding-left: 28px;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Weight:</span>
+                            <input type="number" class="template-weight input-control" step="0.001" min="0" value="${tplWeight}" style="width: 80px; padding: 0.25rem 0.5rem; font-size: 0.85rem;">
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-preview" style="padding: 0.25rem 0.6rem; font-size: 0.8rem; background: rgba(0, 240, 255, 0.1); border-color: rgba(0, 240, 255, 0.25); color: var(--accent-cyan);" data-index="${idx}">🔮 Preview 100</button>
+                            <button class="btn btn-delete" style="padding: 0.25rem 0.6rem; font-size: 0.8rem; background: rgba(255, 70, 70, 0.1); border-color: rgba(255, 70, 70, 0.25); color: rgb(255, 100, 100);" data-index="${idx}">Remove</button>
+                        </div>
                     </div>
                 `;
 
                 const txt = row.querySelector('.template-textarea');
-                txt.addEventListener('change', () => {
-                    templates[idx] = txt.value.trim();
+                const weightInput = row.querySelector('.template-weight');
+
+                const updateTpl = () => {
+                    templates[idx] = [txt.value.trim(), parseFloat(weightInput.value) || 1.0];
                     updateTotalFortunesCount();
-                });
+                };
+
+                txt.addEventListener('change', updateTpl);
+                weightInput.addEventListener('change', updateTpl);
 
                 row.querySelector('.btn-preview').addEventListener('click', () => {
-                    openTemplatePreviewsModal(templates[idx]);
+                    openTemplatePreviewsModal(isTuple ? templates[idx][0] : templates[idx]);
                 });
 
                 row.querySelector('.btn-delete').addEventListener('click', () => {
@@ -3839,13 +4010,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
 
         elBtnAddUpbeatTemplate.addEventListener('click', () => {
-            config.UPBEAT_TEMPLATES.push("A new template about {ITEM} or {VILLAGE}.");
+            config.UPBEAT_TEMPLATES.push(["A new template about {ITEM} or {VILLAGE}.", 1.0]);
             renderTemplateList(config.UPBEAT_TEMPLATES, elUpbeatTemplatesList, 'upbeat');
             updateTotalFortunesCount();
         });
 
         elBtnAddOminousTemplate.addEventListener('click', () => {
-            config.OMINOUS_TEMPLATES.push("Beware of {HAZARD} when compiling code for {ACTIVE_DEVICE}.");
+            config.OMINOUS_TEMPLATES.push(["Beware of {HAZARD} when compiling code for {ACTIVE_DEVICE}.", 1.0]);
             renderTemplateList(config.OMINOUS_TEMPLATES, elOminousTemplatesList, 'ominous');
             updateTotalFortunesCount();
         });
@@ -4113,14 +4284,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         function updateTotalFortunesCount() {
             let totalUpbeat = 0;
             config.UPBEAT_TEMPLATES.forEach(tpl => {
-                const placeholders = extractPlaceholders(tpl);
-                totalUpbeat += getTemplatePermutationsCount(tpl, placeholders);
+                const tplStr = Array.isArray(tpl) ? tpl[0] : tpl;
+                const placeholders = extractPlaceholders(tplStr);
+                totalUpbeat += getTemplatePermutationsCount(tplStr, placeholders);
             });
 
             let totalOminous = 0;
             config.OMINOUS_TEMPLATES.forEach(tpl => {
-                const placeholders = extractPlaceholders(tpl);
-                totalOminous += getTemplatePermutationsCount(tpl, placeholders);
+                const tplStr = Array.isArray(tpl) ? tpl[0] : tpl;
+                const placeholders = extractPlaceholders(tplStr);
+                totalOminous += getTemplatePermutationsCount(tplStr, placeholders);
             });
 
             const totalPool = totalUpbeat + totalOminous;
