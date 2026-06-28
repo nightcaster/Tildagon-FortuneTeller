@@ -132,6 +132,8 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
         
         if path == "/api/fortunes":
             self.handle_api_fortunes(query)
+        elif path == "/api/shutdown":
+            self.handle_api_shutdown()
         elif path == "/api/config":
             self.handle_api_config()
         elif path == "/api/version":
@@ -1046,6 +1048,21 @@ def get_word_value(word):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode("utf-8"))
+
+    def handle_api_shutdown(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "success", "message": "Server shutting down..."}).encode("utf-8"))
+        
+        def kill_server():
+            import time
+            time.sleep(0.5)
+            os._exit(0)
+            
+        import threading
+        threading.Thread(target=kill_server).start()
 
     def handle_api_fortunes(self, query):
         importlib.reload(fortunes)
@@ -2018,6 +2035,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             <h1>🔮 Tildagon Fortune Teller Reviewer & Editor</h1>
             <p>Seeded Fortune Generator & Simulator. Color-coded terms, interactive dictionaries, real-time template editing, and instant updates.</p>
             <p style="margin-top: 0.5rem; font-size: 1.15rem; font-family: var(--font-display);"><span id="stat-total-fortunes" style="color: var(--accent-cyan); font-weight: 700;">Calculating...</span> possible unique fortunes in total database pool</p>
+            <button class="btn" id="btn-shutdown-server" style="background: rgba(255, 60, 60, 0.12); border: 1px solid rgba(255, 60, 60, 0.3); color: #ff8080; margin-top: 1rem; padding: 0.45rem 1rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">🛑 Stop Simulator Server</button>
         </header>
 
         <!-- Main Workspace -->
@@ -2332,6 +2350,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         
         const elSwitchAutoTheme = document.getElementById('switch-auto-theme');
         const elSwitchUseWeights = document.getElementById('switch-use-weights');
+        const elBtnShutdownServer = document.getElementById('btn-shutdown-server');
+
+        elBtnShutdownServer.addEventListener('click', () => {
+            if (confirm("Are you sure you want to stop the simulator server? This will terminate the Python process.")) {
+                fetch('/api/shutdown')
+                    .then(res => res.json())
+                    .then(data => {
+                        alert("Simulator server stopped successfully. You can now close this tab.");
+                    })
+                    .catch(err => {
+                        alert("Server stopped or failed to respond. It may already be shut down.");
+                    });
+            }
+        });
         const elManualThemeGroup = document.getElementById('manual-theme-group');
         const elThemeButtons = document.querySelectorAll('.theme-select-btn');
         const elActiveThemeColors = document.getElementById('active-theme-colors');
