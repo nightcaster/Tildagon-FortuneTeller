@@ -17,21 +17,29 @@ class SeededRandom:
             return None
         return lst[self.next_int() % len(lst)]
 
-    def weighted_choice(self, lst):
+    def weighted_choice(self, lst, invert=False):
         if not lst:
             return None
-        total_weight = 0.0
-        for item, weight in lst:
-            total_weight += weight
+        weights = []
+        for item in lst:
+            w = item[1] if isinstance(item, (list, tuple)) else 1.0
+            weights.append(w)
+        if invert:
+            max_w = max(weights)
+            min_w = min(weights)
+            adjusted_weights = [max_w - w + min_w for w in weights]
+        else:
+            adjusted_weights = weights
+        total_weight = sum(adjusted_weights)
         if total_weight <= 0:
-            return lst[0][0]
+            return lst[0][0] if isinstance(lst[0], (list, tuple)) else lst[0]
         r = (self.next_int() / 2147483647.0) * total_weight
         running = 0.0
-        for item, weight in lst:
-            running += weight
+        for idx, item in enumerate(lst):
+            running += adjusted_weights[idx]
             if r <= running:
                 return item[0] if isinstance(item, (list, tuple)) else item
-        return lst[-1][0]
+        return lst[-1][0] if isinstance(lst[-1], (list, tuple)) else lst[-1]
 
 MAP_LOCATIONS = [
     "Stage A",
@@ -802,19 +810,19 @@ def choose_unique(rng, values, used_terms):
     used_terms.add(raw)
     return choice
 
-def generate_fortune(seed_val, use_weights=True):
+def generate_fortune(seed_val, use_weights=True, invert_weights=False):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
         if use_weights:
-            template = rng.weighted_choice(UPBEAT_TEMPLATES)
+            template = rng.weighted_choice(UPBEAT_TEMPLATES, invert=invert_weights)
         else:
             choice_item = rng.choice(UPBEAT_TEMPLATES)
             template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
     else:
         if use_weights:
-            template = rng.weighted_choice(OMINOUS_TEMPLATES)
+            template = rng.weighted_choice(OMINOUS_TEMPLATES, invert=invert_weights)
         else:
             choice_item = rng.choice(OMINOUS_TEMPLATES)
             template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
@@ -993,20 +1001,20 @@ def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
     preceding_text += left_text
     return is_preceded_by_modal(preceding_text, len(preceding_text))
 
-def generate_fortune_metadata(seed_val, use_weights=True):
+def generate_fortune_metadata(seed_val, use_weights=True, invert_weights=False):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
         if use_weights:
-            template = rng.weighted_choice(UPBEAT_TEMPLATES)
+            template = rng.weighted_choice(UPBEAT_TEMPLATES, invert=invert_weights)
         else:
             choice_item = rng.choice(UPBEAT_TEMPLATES)
             template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
         vibe = "upbeat"
     else:
         if use_weights:
-            template = rng.weighted_choice(OMINOUS_TEMPLATES)
+            template = rng.weighted_choice(OMINOUS_TEMPLATES, invert=invert_weights)
         else:
             choice_item = rng.choice(OMINOUS_TEMPLATES)
             template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item

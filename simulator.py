@@ -539,19 +539,19 @@ def choose_unique(rng, values, used_terms):
     used_terms.add(raw)
     return choice
 
-def generate_fortune(seed_val, use_weights=True):
+def generate_fortune(seed_val, use_weights=True, invert_weights=False):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
         if use_weights:
-            template = rng.weighted_choice(UPBEAT_TEMPLATES)
+            template = rng.weighted_choice(UPBEAT_TEMPLATES, invert=invert_weights)
         else:
             choice_item = rng.choice(UPBEAT_TEMPLATES)
             template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
     else:
         if use_weights:
-            template = rng.weighted_choice(OMINOUS_TEMPLATES)
+            template = rng.weighted_choice(OMINOUS_TEMPLATES, invert=invert_weights)
         else:
             choice_item = rng.choice(OMINOUS_TEMPLATES)
             template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
@@ -726,20 +726,20 @@ def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
     preceding_text += left_text
     return is_preceded_by_modal(preceding_text, len(preceding_text))
 
-def generate_fortune_metadata(seed_val, use_weights=True):
+def generate_fortune_metadata(seed_val, use_weights=True, invert_weights=False):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
         if use_weights:
-            template = rng.weighted_choice(UPBEAT_TEMPLATES)
+            template = rng.weighted_choice(UPBEAT_TEMPLATES, invert=invert_weights)
         else:
             choice_item = rng.choice(UPBEAT_TEMPLATES)
             template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
         vibe = "upbeat"
     else:
         if use_weights:
-            template = rng.weighted_choice(OMINOUS_TEMPLATES)
+            template = rng.weighted_choice(OMINOUS_TEMPLATES, invert=invert_weights)
         else:
             choice_item = rng.choice(OMINOUS_TEMPLATES)
             template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
@@ -1067,6 +1067,7 @@ def get_word_value(word):
     def handle_api_fortunes(self, query):
         importlib.reload(fortunes)
         use_weights = query.get("use_weights", ["1"])[0] == "1"
+        invert_weights = query.get("invert_weights", ["0"])[0] == "1"
         badge_id = query.get("badge_id", ["tildagon_badge_fortune"])[0]
         
         # Get date
@@ -1117,7 +1118,7 @@ def get_word_value(word):
                 # Same formula as app.py
                 word_val = fortunes.get_word_value(color_name)
                 path_seed = base_seed + word_val + number * 31
-                metadata = fortunes.generate_fortune_metadata(path_seed, use_weights=use_weights)
+                metadata = fortunes.generate_fortune_metadata(path_seed, use_weights=use_weights, invert_weights=invert_weights)
                 fortune_text = "".join(t["value"] for t in metadata["tokens"])
                 paths.append({
                     "color_idx": color_idx,
@@ -1136,7 +1137,7 @@ def get_word_value(word):
         seq_rng = fortunes.SeededRandom(base_seed)
         for i in range(100):
             step_seed = seq_rng.next_int()
-            metadata = fortunes.generate_fortune_metadata(step_seed, use_weights=use_weights)
+            metadata = fortunes.generate_fortune_metadata(step_seed, use_weights=use_weights, invert_weights=invert_weights)
             fortune_text = "".join(t["value"] for t in metadata["tokens"])
             sequential.append({
                 "index": i + 1,
@@ -2095,6 +2096,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                             <span class="slider"></span>
                         </label>
                     </div>
+                    <div class="switch-container" id="invert-weights-container">
+                        <span class="switch-label">Invert Weights (Fewer options = rarer)</span>
+                        <label class="switch">
+                            <input type="checkbox" id="switch-invert-weights">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Color Theme configuration -->
@@ -2350,6 +2358,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         
         const elSwitchAutoTheme = document.getElementById('switch-auto-theme');
         const elSwitchUseWeights = document.getElementById('switch-use-weights');
+        const elSwitchInvertWeights = document.getElementById('switch-invert-weights');
+        const elInvertWeightsContainer = document.getElementById('invert-weights-container');
         const elBtnShutdownServer = document.getElementById('btn-shutdown-server');
 
         elBtnShutdownServer.addEventListener('click', () => {
@@ -2470,7 +2480,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 elDirectLookupResult.innerText = "No templates loaded yet.";
                 return;
             }
-            const template = rng.weightedChoice(templateList);
+            let template;
+            const useWeights = elSwitchUseWeights.checked;
+            const invertWeights = elSwitchInvertWeights.checked;
+            if (useWeights) {
+                template = rng.weightedChoice(templateList, invertWeights);
+            } else {
+                const choiceItem = rng.choice(templateList);
+                template = Array.isArray(choiceItem) ? choiceItem[0] : choiceItem;
+            }
             const fortune = generateFortuneJS(template, rng);
             elDirectLookupResult.style.display = 'block';
             elDirectLookupResult.style.color = 'var(--accent-cyan)';
@@ -2573,6 +2591,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         });
 
         elSwitchUseWeights.addEventListener('change', () => {
+            if (elSwitchUseWeights.checked) {
+                elInvertWeightsContainer.style.opacity = '1';
+                elInvertWeightsContainer.style.pointerEvents = 'auto';
+            } else {
+                elInvertWeightsContainer.style.opacity = '0.5';
+                elInvertWeightsContainer.style.pointerEvents = 'none';
+            }
+            fetchFortunes({ seed: elSeedInput.value });
+        });
+
+        elSwitchInvertWeights.addEventListener('change', () => {
             fetchFortunes({ seed: elSeedInput.value });
         });
 
@@ -2717,8 +2746,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             elLoadingOverlay.classList.add('active');
             
             const useWeights = elSwitchUseWeights.checked ? '1' : '0';
+            const invertWeights = elSwitchInvertWeights.checked ? '1' : '0';
             const finalParams = {
                 use_weights: useWeights,
+                invert_weights: invertWeights,
                 ...params
             };
             const queryString = Object.keys(finalParams)
@@ -2930,13 +2961,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 if (!lst || lst.length === 0) return null;
                 return lst[this.nextInt() % lst.length];
             }
-            weightedChoice(lst) {
+            weightedChoice(lst, invert = false) {
                 if (!lst || lst.length === 0) return null;
-                let totalWeight = 0.0;
-                for (let i = 0; i < lst.length; i++) {
-                    const item = lst[i];
-                    totalWeight += Array.isArray(item) ? item[1] : 1.0;
+                const weights = lst.map(item => Array.isArray(item) ? item[1] : 1.0);
+                let adjustedWeights = weights;
+                if (invert) {
+                    const maxW = Math.max(...weights);
+                    const minW = Math.min(...weights);
+                    adjustedWeights = weights.map(w => maxW - w + minW);
                 }
+                const totalWeight = adjustedWeights.reduce((a, b) => a + b, 0);
                 if (totalWeight <= 0) {
                     const first = lst[0];
                     return Array.isArray(first) ? first[0] : first;
@@ -2944,10 +2978,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 const r = (this.nextInt() / 2147483647.0) * totalWeight;
                 let running = 0.0;
                 for (let i = 0; i < lst.length; i++) {
-                    const item = lst[i];
-                    const weight = Array.isArray(item) ? item[1] : 1.0;
-                    running += weight;
+                    running += adjustedWeights[i];
                     if (r <= running) {
+                        const item = lst[i];
                         return Array.isArray(item) ? item[0] : item;
                     }
                 }
