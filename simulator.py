@@ -455,6 +455,9 @@ def _resolve_key(key):
     if key.endswith("_PLURAL"):
         key = key[:-len("_PLURAL")]
         plural_only = True
+    if key.endswith("_BASE"):
+        key = key[:-len("_BASE")]
+        plural_only = True
     if key.endswith("_ACTIVE"):
         key = key[:-len("_ACTIVE")]
         active_only = True
@@ -3108,6 +3111,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
             if (key.endsWith("_PLURAL")) {
                 key = key.substring(0, key.length - "_PLURAL".length);
+                pluralOnly = true;
+            }
+            if (key.endsWith("_BASE")) {
+                key = key.substring(0, key.length - "_BASE".length);
                 pluralOnly = true;
             }
             if (key.endsWith("_ACTIVE")) {

@@ -421,7 +421,7 @@ TERMS = {
     # ==========================================
     # 4. VERBS & ACTIONS
     # Verb entries are 4-tuples: (Base/Plural, Singular, Continuous, Past)
-    #   - Index 0: Base / Plural / Infinitive (e.g. "debug") -> used with plural subjects, or forced using suffix "_PLURAL" (e.g. {HACKER_ACTION_PLURAL})
+    #   - Index 0: Base / Plural / Infinitive (e.g. "debug") -> used with plural subjects, or forced using suffix "_PLURAL" or "_BASE" (e.g. {HACKER_ACTION_PLURAL} or {HACKER_ACTION_BASE})
     #   - Index 1: Singular present (e.g. "debugs") -> used with singular subjects
     #   - Index 2: Continuous / Active (e.g. "debugging") -> forced using suffix "_ACTIVE"
     #   - Index 3: Past tense (e.g. "debugged") -> forced using suffix "_PAST"
@@ -753,6 +753,9 @@ def _resolve_key(key):
         add_collective = True
     if key.endswith("_PLURAL"):
         key = key[:-len("_PLURAL")]
+        plural_only = True
+    if key.endswith("_BASE"):
+        key = key[:-len("_BASE")]
         plural_only = True
     if key.endswith("_ACTIVE"):
         key = key[:-len("_ACTIVE")]
