@@ -365,19 +365,64 @@ COLLECTIVE_PREFIXES = [
     "some"
 ]
 
-def format_item(adjective, item, rng=None, add_collective=False):
+def pluralize(noun):
+    if not noun:
+        return ""
+    words = noun.split(" ")
+    word = words[-1]
+    lower_word = word.lower()
+    
+    if lower_word.endswith("y"):
+        if len(lower_word) > 1 and lower_word[-2] not in "aeiou":
+            plural_word = word[:-1] + "ies"
+        else:
+            plural_word = word + "s"
+    elif lower_word.endswith(("s", "x", "z", "ch", "sh")):
+        plural_word = word + "es"
+    elif lower_word.endswith("fe"):
+        plural_word = word[:-2] + "ves"
+    elif lower_word.endswith("f") and not lower_word.endswith("ff"):
+        plural_word = word[:-1] + "ves"
+    else:
+        plural_word = word + "s"
+        
+    words[-1] = plural_word
+    return " ".join(words)
+
+def format_item(adjective, item, rng=None, add_collective=False, force_plural=False):
     if isinstance(item, (list, tuple)):
         name = item[0]
         itype = item[1]
-        unit = item[2] if len(item) > 2 else None
+        unit = None
+        is_collective = False
+        if itype == "NOUN:countable" and add_collective and rng:
+            if (rng.next_int() >> 8) % 2 == 0:
+                unit = rng.choice(COLLECTIVE_PREFIXES)
+                is_collective = True
+        elif itype == "NOUN:plural" and add_collective and rng:
+            if (rng.next_int() >> 8) % 2 == 0:
+                unit = rng.choice(COLLECTIVE_PREFIXES)
+                is_collective = True
+                
+        if itype == "NOUN:plural" and not add_collective:
+            unit = item[2] if len(item) > 2 else None
+
+        if force_plural or is_collective or itype == "NOUN:plural":
+            if itype == "NOUN:countable":
+                if len(item) > 2 and item[2]:
+                    name = item[2]
+                else:
+                    name = pluralize(name)
+                itype = "NOUN:plural"
+        else:
+            unit = None
     else:
         name = item
         itype = "NOUN:countable"
+        if force_plural:
+            name = pluralize(name)
+            itype = "NOUN:plural"
         unit = None
-
-    if itype == "NOUN:plural" and not unit and rng and add_collective:
-        if (rng.next_int() >> 8) % 2 == 0:
-            unit = rng.choice(COLLECTIVE_PREFIXES)
 
     if unit:
         if adjective:
@@ -440,15 +485,17 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
 
         pool = TERMS[base_key]
         if plural_only:
-            pool = [e for e in pool if isinstance(e, tuple) and e[1] == "NOUN:plural"]
+            filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+            if filtered:
+                pool = filtered
 
         choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
 
         if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
             # Noun — format with article / collective prefix, apply pending adjective
             adj = pending_adjective or ""
-            formatted = format_item(adj, choice, rng, add_collective=add_coll)
-            is_pl = (choice[1] == "NOUN:plural" and not formatted.lower().startswith(("a ", "an ")))
+            formatted = format_item(adj, choice, rng, add_collective=add_coll, force_plural=plural_only)
+            is_pl = (choice[1] == "NOUN:plural" or plural_only) and not formatted.lower().startswith(("a ", "an "))
             if subject_is_plural is None:
                 subject_is_plural = is_pl
                 active_plural[base_key] = is_pl
@@ -550,12 +597,16 @@ def generate_fortune(seed_val):
                 base_key, plural_only, add_coll, active_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
+                    pool = TERMS[base_key]
+                    if plural_only:
+                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+                        if filtered:
+                            pool = filtered
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
+                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
+                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
                     elif isinstance(choice, tuple):
                         if active_only:
                             choice = choice[2] if len(choice) > 2 else choice[0]
@@ -610,12 +661,16 @@ def generate_fortune(seed_val):
                 base_key, plural_only, add_coll, active_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
+                    pool = TERMS[base_key]
+                    if plural_only:
+                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+                        if filtered:
+                            pool = filtered
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
+                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
+                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
                     elif isinstance(choice, tuple):
                         if active_only:
                             choice = choice[2] if len(choice) > 2 else choice[0]
@@ -729,13 +784,17 @@ def generate_fortune_metadata(seed_val):
                 base_key, plural_only, add_coll, active_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
+                    pool = TERMS[base_key]
+                    if plural_only:
+                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+                        if filtered:
+                            pool = filtered
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
+                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
+                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
                         if active_only:
@@ -831,13 +890,17 @@ def generate_fortune_metadata(seed_val):
                 base_key, plural_only, add_coll, active_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
+                    pool = TERMS[base_key]
+                    if plural_only:
+                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+                        if filtered:
+                            pool = filtered
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
+                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
+                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
                         if active_only:

@@ -173,35 +173,21 @@ TERMS = {
     "DESTINATION": MAP_LOCATIONS + VILLAGES,
     "PEOPLE_SUBJECT": [
         ("friend", "NOUN:countable"),
-        ("friends", "NOUN:plural"),
         ("volunteer", "NOUN:countable"),
-        ("volunteers", "NOUN:plural"),
         ("furry", "NOUN:countable"),
-        ("furries", "NOUN:plural"),
         ("hacker", "NOUN:countable"),
-        ("hackers", "NOUN:plural"),
-        # ("hardware wizard", "NOUN:countable"),
-        # ("hardware wizards", "NOUN:plural"),
-        # ("event sponsor", "NOUN:countable"),
-        # ("event sponsors", "NOUN:plural"),
-        ("Null Sector DJ", "NOUN:countable"),
-        ("Null Sector DJs", "NOUN:plural"),
+        ("Null Sector DJ", "NOUN:countable", "Null Sector DJs"),
         ("event organizer", "NOUN:countable"),
-        ("event organizers", "NOUN:plural"),
     ],
     "CREATURE": [
         ("robot", "NOUN:countable"),
         ("creature", "NOUN:countable"),
         ("duck", "NOUN:countable"),
-        ("ducks", "NOUN:plural"),
         ("spider", "NOUN:countable"),
-        ("spiders", "NOUN:plural"),
+        ("sentient hexpansion", "NOUN:countable", "hexpansions"),
+        ("rogue deer", "NOUN:countable", "rogue deer"),
         ("GPS rave bots", "NOUN:plural"),
-        ("sentient hexpansion", "NOUN:countable"),
-        ("hexpansions", "NOUN:plural"),
         ("volunteers", "NOUN:plural"),
-        ("rogue deer", "NOUN:countable"),
-        ("rogue deer", "NOUN:plural"),
     ],
     "COMPUTE_VERB": [
         ("debug", "debugs", "debugging", "debugged"),
@@ -263,37 +249,24 @@ TERMS = {
         ("soldering iron", "NOUN:countable"),
     ],
     "COMPUTE_TARGET": [
-        ("someone else's badge", "NOUN:mass"),
-        ("someone else's badges", "NOUN:plural"),
-        ("sketchy firmware", "NOUN:mass"),
         ("hidden easter egg", "NOUN:countable"),
-        ("hidden easter eggs", "NOUN:plural"),
         ("3.5\" floppy disk", "NOUN:countable"),
-        ("3.5\" floppy disks", "NOUN:plural"),
         ("arcade machine", "NOUN:countable"),
-        ("arcade machines", "NOUN:plural"),
         ("game cartridge", "NOUN:countable"),
-        ("game cartridges", "NOUN:plural"),
+        ("someone else's badges", "NOUN:plural"),
+        ("someone else's badge", "NOUN:mass"),
+        ("sketchy firmware", "NOUN:mass"),
     ],
     "HARDWARE_TARGET": [
-        ("custom PCB", "NOUN:countable"),
-        ("custom PCBs", "NOUN:plural"),
-        ("tiny IC", "NOUN:countable"),
-        ("tiny ICs", "NOUN:plural"),
+        ("custom PCB", "NOUN:countable", "custom PCBs"),
+        ("tiny IC", "NOUN:countable", "tiny ICs"),
         ("GPS tracker", "NOUN:countable"),
-        ("GPS trackers", "NOUN:plural"),
         ("prototype hexpansion", "NOUN:countable"),
-        ("prototype hexpansions", "NOUN:plural"),
         ("overpowered microcontroller", "NOUN:countable"),
-        ("overpowered microcontrollers", "NOUN:plural"),
         ("oscilloscope", "NOUN:countable"),
-        ("oscilloscopes", "NOUN:plural"),
         ("prototype Tildagon frontboard", "NOUN:countable"),
-        ("prototype Tildagon frontboards", "NOUN:plural"),
         ("digital synth", "NOUN:countable"),
-        ("digital synths", "NOUN:plural"),
         ("unfinished hexpansion", "NOUN:countable"),
-        ("unfinished hexpansions", "NOUN:plural"),
     ],
     "SOCIAL_OBJECT": [
         ("cold beverage", "NOUN:countable"),
@@ -306,9 +279,9 @@ TERMS = {
         ("bratwurst", "NOUN:countable"),
         ("dynamic token", "NOUN:countable"),
         ("LED strip woven into a hammock", "NOUN:countable"),
-        ("solder flux", "NOUN:mass", "tube of"),
         ("spider wearing a tiny high-vis vest", "NOUN:countable"),
         ("spiders wearing tiny high-vis vests", "NOUN:plural"),
+        ("solder flux", "NOUN:mass", "tube of"),
     ],
     "CAMP_ACTION": [
         ("volunteer at the bar", "volunteers at the bar", "volunteering at the bar", "volunteered at the bar"),
@@ -384,10 +357,10 @@ TERMS = {
         ("oscilloscope", "NOUN:countable"),
         ("custom PCB", "NOUN:countable"),
         ("RF antenna", "NOUN:countable"),
+        ("resistors", "NOUN:plural", "strip of"),
         ("solder", "NOUN:mass", "spool of"),
         ("fiber optic cable", "NOUN:mass", "length of"),
         ("thermal paste", "NOUN:mass", "dollop of"),
-        ("resistors", "NOUN:plural", "strip of"),
     ],
     "CRAFT_ITEM": [
         ("solder joint", "NOUN:countable"),
@@ -395,8 +368,8 @@ TERMS = {
         ("cup of tea", "NOUN:countable"),
         ("crimp tool", "NOUN:countable"),
         ("component bag", "NOUN:countable"),
-        ("soldering flux", "NOUN:mass", "roll of"),
         ("jumper wire", "NOUN:countable"),
+        ("soldering flux", "NOUN:mass", "roll of"),
         ("conductive thread", "NOUN:mass", "bobbin of"),
         ("club mate", "NOUN:mass", "bottle of"),
         ("hot glue", "NOUN:mass", "stick of"),
@@ -480,10 +453,10 @@ TERMS = {
         ("in the info tent", "NOUN:mass"),
     ],
     "FESTIVAL_INFRASTRUCTURE": [
-        ("the DECT phone system", "NOUN:mass"),
-        ("the fibre backbone", "NOUN:mass"),
         ("stuck telehandler", "NOUN:countable"),
         ("stuck van", "NOUN:countable"),
+        ("the DECT phone system", "NOUN:mass"),
+        ("the fibre backbone", "NOUN:mass"),
         ("the Wi-Fi infrastructure", "NOUN:mass"),
         ("a soiled Datenklo", "NOUN:mass"),
     ],
@@ -652,19 +625,64 @@ COLLECTIVE_PREFIXES = [
     "some"
 ]
 
-def format_item(adjective, item, rng=None, add_collective=False):
+def pluralize(noun):
+    if not noun:
+        return ""
+    words = noun.split(" ")
+    word = words[-1]
+    lower_word = word.lower()
+    
+    if lower_word.endswith("y"):
+        if len(lower_word) > 1 and lower_word[-2] not in "aeiou":
+            plural_word = word[:-1] + "ies"
+        else:
+            plural_word = word + "s"
+    elif lower_word.endswith(("s", "x", "z", "ch", "sh")):
+        plural_word = word + "es"
+    elif lower_word.endswith("fe"):
+        plural_word = word[:-2] + "ves"
+    elif lower_word.endswith("f") and not lower_word.endswith("ff"):
+        plural_word = word[:-1] + "ves"
+    else:
+        plural_word = word + "s"
+        
+    words[-1] = plural_word
+    return " ".join(words)
+
+def format_item(adjective, item, rng=None, add_collective=False, force_plural=False):
     if isinstance(item, (list, tuple)):
         name = item[0]
         itype = item[1]
-        unit = item[2] if len(item) > 2 else None
+        unit = None
+        is_collective = False
+        if itype == "NOUN:countable" and add_collective and rng:
+            if (rng.next_int() >> 8) % 2 == 0:
+                unit = rng.choice(COLLECTIVE_PREFIXES)
+                is_collective = True
+        elif itype == "NOUN:plural" and add_collective and rng:
+            if (rng.next_int() >> 8) % 2 == 0:
+                unit = rng.choice(COLLECTIVE_PREFIXES)
+                is_collective = True
+                
+        if itype == "NOUN:plural" and not add_collective:
+            unit = item[2] if len(item) > 2 else None
+
+        if force_plural or is_collective or itype == "NOUN:plural":
+            if itype == "NOUN:countable":
+                if len(item) > 2 and item[2]:
+                    name = item[2]
+                else:
+                    name = pluralize(name)
+                itype = "NOUN:plural"
+        else:
+            unit = None
     else:
         name = item
         itype = "NOUN:countable"
+        if force_plural:
+            name = pluralize(name)
+            itype = "NOUN:plural"
         unit = None
-
-    if itype == "NOUN:plural" and not unit and rng and add_collective:
-        if (rng.next_int() >> 8) % 2 == 0:
-            unit = rng.choice(COLLECTIVE_PREFIXES)
 
     if unit:
         if adjective:
@@ -731,15 +749,17 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
 
         pool = TERMS[base_key]
         if plural_only:
-            pool = [e for e in pool if isinstance(e, tuple) and e[1] == "NOUN:plural"]
+            filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+            if filtered:
+                pool = filtered
 
         choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
 
         if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
             # Noun — format with article / collective prefix, apply pending adjective
             adj = pending_adjective or ""
-            formatted = format_item(adj, choice, rng, add_collective=add_coll)
-            is_pl = (choice[1] == "NOUN:plural" and not formatted.lower().startswith(("a ", "an ")))
+            formatted = format_item(adj, choice, rng, add_collective=add_coll, force_plural=plural_only)
+            is_pl = (choice[1] == "NOUN:plural" or plural_only) and not formatted.lower().startswith(("a ", "an "))
             if subject_is_plural is None:
                 subject_is_plural = is_pl
                 active_plural[base_key] = is_pl
@@ -843,12 +863,16 @@ def generate_fortune(seed_val):
                 base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
+                    pool = TERMS[base_key]
+                    if plural_only:
+                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+                        if filtered:
+                            pool = filtered
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
+                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
+                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
                     elif isinstance(choice, tuple):
                         if active_only:
                             choice = choice[2] if len(choice) > 2 else choice[0]
@@ -905,12 +929,16 @@ def generate_fortune(seed_val):
                 base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
+                    pool = TERMS[base_key]
+                    if plural_only:
+                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+                        if filtered:
+                            pool = filtered
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
+                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
+                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
                     elif isinstance(choice, tuple):
                         if active_only:
                             choice = choice[2] if len(choice) > 2 else choice[0]
@@ -1026,13 +1054,17 @@ def generate_fortune_metadata(seed_val):
                 base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
+                    pool = TERMS[base_key]
+                    if plural_only:
+                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+                        if filtered:
+                            pool = filtered
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
+                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
+                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
                         if active_only:
@@ -1130,13 +1162,17 @@ def generate_fortune_metadata(seed_val):
                 base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
-                    pool = [e for e in TERMS[base_key] if not plural_only or (isinstance(e, tuple) and e[1] == "NOUN:plural")]
+                    pool = TERMS[base_key]
+                    if plural_only:
+                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
+                        if filtered:
+                            pool = filtered
                     choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
                     raw_choice = choice[0] if isinstance(choice, (list, tuple)) else choice
                     if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
                         itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll)
-                        is_plural = (itype == "NOUN:plural" and not choice.lower().startswith(("a ", "an ")))
+                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
+                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
                     elif isinstance(choice, tuple):
                         raw_choice = choice[0]
                         if active_only:
