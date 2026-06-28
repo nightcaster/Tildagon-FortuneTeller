@@ -186,7 +186,7 @@ TERMS = {
         ("spider", "NOUN:countable"),
         ("sentient hexpansion", "NOUN:countable", "hexpansions"),
         ("rogue deer", "NOUN:countable", "rogue deer"),
-        ("GPS rave bots", "NOUN:plural"),
+        ("WorldOfTechno", "NOUN:mass"),
         ("volunteers", "NOUN:plural"),
     ],
     "COMPUTE_VERB": [
@@ -253,8 +253,7 @@ TERMS = {
         ("3.5\" floppy disk", "NOUN:countable"),
         ("arcade machine", "NOUN:countable"),
         ("game cartridge", "NOUN:countable"),
-        ("someone else's badges", "NOUN:plural"),
-        ("someone else's badge", "NOUN:mass"),
+        ("someone else's badge", "NOUN:countable"),
         ("sketchy firmware", "NOUN:mass"),
     ],
     "HARDWARE_TARGET": [
