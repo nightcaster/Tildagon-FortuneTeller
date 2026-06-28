@@ -190,8 +190,8 @@ TERMS = {
         ("in the depth of your sleeping bag", "NOUN:mass"),
         ("in the bowels of your tent", "NOUN:mass"),
         ("in the queue for the showers", "NOUN:mass"),
-        ("in the toilets", "NOUN:mass"),
-        ("in the bar", "NOUN:mass"),
+        ("near the toilets", "NOUN:mass"),
+        ("behind the bar", "NOUN:mass"),
         ("in the info tent", "NOUN:mass"),
     ],
     "TIME": [
@@ -214,6 +214,7 @@ TERMS = {
         "the spider repellent ability",
         "optical camouflage",
         "the ability to boil water",
+        "the power of flight",
     ],
     "TECH_TRIVIA": [
         "solder joints",
@@ -240,8 +241,9 @@ TERMS = {
         "three",
         "twenty-six",
         "0xCAFE",
-        "four hundred and four",
-        "eight thousand and eighty",
+        "π",
+        "e",
+        "C",
     ],
 
     # ==========================================
@@ -496,9 +498,9 @@ TERMS = {
 }
 
 UPBEAT_TEMPLATES = [
-    ('You might see Jonty {TIME} {HARDWARE_VERB_ACTIVE} {FESTIVAL_INFRASTRUCTURE} using {CREATURE_PLURAL_COLLECTIVE}.', 9.055),
+    ('You might see Jonty {TIME} {HARDWARE_VERB_ACTIVE} {FESTIVAL_INFRASTRUCTURE} using {CREATURE_PLURAL_COLLECTIVE}.', 12.2),
     ('{TECH_ADJECTIVE+TECH_ITEM} gives your {ACTIVE_DEVICE} {SPECIAL_DEVICE_FEATURE}.', 10.567),
-    ('A mysterious firmware update signed by Kliment grants your Tildagon {SPECIAL_DEVICE_FEATURE}.', 29.43),
+    ('A mysterious firmware update signed by Kliment grants your Tildagon {SPECIAL_DEVICE_FEATURE}.', 10.2),
     ('A ping on port 8081 {TIME} signals incoming {TECH_ADJECTIVE+CREATURE_PLURAL}', 12.489),
     ('Be on the lookout for {TECH_ADJECTIVE+HARDWARE_TARGET} to {HARDWARE_VERB}', 16.127),
     ('Quick! You should be {CAMP_ACTION_ACTIVE}', 28.119),

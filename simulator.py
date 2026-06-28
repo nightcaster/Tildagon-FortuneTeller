@@ -2837,6 +2837,102 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                  .replace(/'/g, "&#039;");
         }
 
+        function countTagPossibilitiesJS(tag) {
+            if (tag.includes("?")) {
+                return 1;
+            }
+            if (tag.includes("+")) {
+                const parts = tag.split("+");
+                let product = 1;
+                for (const part of parts) {
+                    product *= countTagPossibilitiesJS(part);
+                }
+                return product;
+            }
+            const { baseKey, pluralOnly, addCollective, activeOnly, pastOnly } = _resolveKeyJS(tag);
+            let pool = getOptionsListForKey(baseKey);
+            if (!pool || pool.length === 0) {
+                if (baseKey === 'MAP_LOCATION') pool = config.MAP_LOCATIONS;
+                else if (baseKey === 'VILLAGE') pool = config.VILLAGES;
+                else if (baseKey === 'DESTINATION') pool = [...config.MAP_LOCATIONS, ...config.VILLAGES];
+            }
+            if (!pool || pool.length === 0) return 1;
+            
+            if (pluralOnly) {
+                const filtered = pool.filter(e => !Array.isArray(e) || ["NOUN:countable", "NOUN:plural"].includes(e[1]));
+                return filtered.length || 1;
+            }
+            return pool.length;
+        }
+
+        function countTemplatePossibilitiesJS(template) {
+            let product = 1;
+            let idx = 0;
+            while (true) {
+                idx = template.indexOf("{", idx);
+                if (idx === -1) break;
+                const endIdx = template.indexOf("}", idx);
+                if (endIdx === -1) break;
+                const tag = template.substring(idx + 1, endIdx);
+                product *= countTagPossibilitiesJS(tag);
+                idx = endIdx + 1;
+            }
+            return product;
+        }
+
+        function getTemplateLikelihoodJS(templateText, vibe) {
+            const useWeights = elSwitchUseWeights ? elSwitchUseWeights.checked : true;
+            const invertWeights = elSwitchInvertWeights ? elSwitchInvertWeights.checked : false;
+            
+            const list = vibe === "upbeat" ? config.UPBEAT_TEMPLATES : config.OMINOUS_TEMPLATES;
+            const vibeProb = vibe === "upbeat" ? 0.85 : 0.15;
+            
+            if (!useWeights) {
+                return (vibeProb / list.length) * 100;
+            }
+            
+            const weights = list.map(item => Array.isArray(item) ? item[1] : 1.0);
+            let adjustedWeights = weights;
+            if (invertWeights) {
+                const maxW = Math.max(...weights);
+                const minW = Math.min(...weights);
+                adjustedWeights = weights.map(w => maxW - w + minW);
+            }
+            const totalWeight = adjustedWeights.reduce((a, b) => a + b, 0);
+            if (totalWeight <= 0) return (vibeProb / list.length) * 100;
+            
+            const idx = list.findIndex(item => (Array.isArray(item) ? item[0] : item) === templateText);
+            if (idx === -1) return 0;
+            
+            return (vibeProb * (adjustedWeights[idx] / totalWeight)) * 100;
+        }
+
+        function getLikelihoodHtml(templateText, vibe) {
+            const tplProb = getTemplateLikelihoodJS(templateText, vibe);
+            const totalPossibilities = countTemplatePossibilitiesJS(templateText);
+            const outputProb = tplProb / totalPossibilities;
+            
+            let outputText = "";
+            if (totalPossibilities === 1) {
+                outputText = `${tplProb.toFixed(3)}% (1 in ${(100/tplProb).toFixed(0)})`;
+            } else {
+                const ratio = 100 / outputProb;
+                let formattedRatio;
+                if (ratio >= 1e9) {
+                    formattedRatio = (ratio / 1e9).toFixed(1) + "B";
+                } else if (ratio >= 1e6) {
+                    formattedRatio = (ratio / 1e6).toFixed(1) + "M";
+                } else if (ratio >= 1e3) {
+                    formattedRatio = (ratio / 1e3).toFixed(1) + "K";
+                } else {
+                    formattedRatio = ratio.toFixed(0);
+                }
+                outputText = `1 in ${formattedRatio} (${outputProb.toExponential(2)}%)`;
+            }
+            
+            return `Tpl P: ${tplProb.toFixed(2)}% &bull; Output P: ${outputText}`;
+        }
+
         function renderBadgePaths(paths) {
             elColorsGrid.innerHTML = '';
             
@@ -2886,7 +2982,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         <div class="fortune-number">${p.number}</div>
                         <div class="fortune-text-box">
                             <span class="fortune-text">${formatTokens(p.tokens, 'paths', p._globalIdx, p.template, p.vibe)}</span>
-                            <span class="fortune-meta">seed: ${p.path_seed} &bull; template: <span class="edit-template-link" onclick="navigateToTemplate(event, '${escapeHtml(p.template)}', '${p.vibe}')" style="font-family: monospace; color: var(--accent-cyan); text-decoration: underline; cursor: pointer; opacity: 0.85;">${escapeHtml(p.template)}</span></span>
+                            <span class="fortune-meta">seed: ${p.path_seed} &bull; template: <span class="edit-template-link" onclick="navigateToTemplate(event, '${escapeHtml(p.template)}', '${p.vibe}')" style="font-family: monospace; color: var(--accent-cyan); text-decoration: underline; cursor: pointer; opacity: 0.85;">${escapeHtml(p.template)}</span> &bull; ${getLikelihoodHtml(p.template, p.vibe)}</span>
                         </div>
                     `;
                     list.appendChild(item);
@@ -2906,7 +3002,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <div class="seq-badge">#${s.index}</div>
                     <div class="seq-content">
                         <div class="fortune-text">${formatTokens(s.tokens, 'sequential', sIdx, s.template, s.vibe)}</div>
-                        <div class="seq-seed">Seed: ${s.seed} &bull; template: <span class="edit-template-link" onclick="navigateToTemplate(event, '${escapeHtml(s.template)}', '${s.vibe}')" style="font-family: monospace; color: var(--accent-cyan); text-decoration: underline; cursor: pointer; opacity: 0.85;">${escapeHtml(s.template)}</span></div>
+                        <div class="seq-seed">Seed: ${s.seed} &bull; template: <span class="edit-template-link" onclick="navigateToTemplate(event, '${escapeHtml(s.template)}', '${s.vibe}')" style="font-family: monospace; color: var(--accent-cyan); text-decoration: underline; cursor: pointer; opacity: 0.85;">${escapeHtml(s.template)}</span> &bull; ${getLikelihoodHtml(s.template, s.vibe)}</div>
                     </div>
                 `;
                 elSeqList.appendChild(item);
