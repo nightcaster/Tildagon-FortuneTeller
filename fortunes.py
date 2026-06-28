@@ -802,14 +802,22 @@ def choose_unique(rng, values, used_terms):
     used_terms.add(raw)
     return choice
 
-def generate_fortune(seed_val):
+def generate_fortune(seed_val, use_weights=True):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
-        template = rng.weighted_choice(UPBEAT_TEMPLATES)
+        if use_weights:
+            template = rng.weighted_choice(UPBEAT_TEMPLATES)
+        else:
+            choice_item = rng.choice(UPBEAT_TEMPLATES)
+            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
     else:
-        template = rng.weighted_choice(OMINOUS_TEMPLATES)
+        if use_weights:
+            template = rng.weighted_choice(OMINOUS_TEMPLATES)
+        else:
+            choice_item = rng.choice(OMINOUS_TEMPLATES)
+            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
         
     result = template
     used_terms = set()
@@ -985,15 +993,23 @@ def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
     preceding_text += left_text
     return is_preceded_by_modal(preceding_text, len(preceding_text))
 
-def generate_fortune_metadata(seed_val):
+def generate_fortune_metadata(seed_val, use_weights=True):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
-        template = rng.weighted_choice(UPBEAT_TEMPLATES)
+        if use_weights:
+            template = rng.weighted_choice(UPBEAT_TEMPLATES)
+        else:
+            choice_item = rng.choice(UPBEAT_TEMPLATES)
+            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
         vibe = "upbeat"
     else:
-        template = rng.weighted_choice(OMINOUS_TEMPLATES)
+        if use_weights:
+            template = rng.weighted_choice(OMINOUS_TEMPLATES)
+        else:
+            choice_item = rng.choice(OMINOUS_TEMPLATES)
+            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
         vibe = "ominous"
         
     tokens = [{"type": "text", "value": template}]

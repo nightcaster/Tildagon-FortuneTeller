@@ -537,14 +537,22 @@ def choose_unique(rng, values, used_terms):
     used_terms.add(raw)
     return choice
 
-def generate_fortune(seed_val):
+def generate_fortune(seed_val, use_weights=True):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
-        template = rng.weighted_choice(UPBEAT_TEMPLATES)
+        if use_weights:
+            template = rng.weighted_choice(UPBEAT_TEMPLATES)
+        else:
+            choice_item = rng.choice(UPBEAT_TEMPLATES)
+            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
     else:
-        template = rng.weighted_choice(OMINOUS_TEMPLATES)
+        if use_weights:
+            template = rng.weighted_choice(OMINOUS_TEMPLATES)
+        else:
+            choice_item = rng.choice(OMINOUS_TEMPLATES)
+            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
         
     result = template
     used_terms = set()
@@ -716,15 +724,23 @@ def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
     preceding_text += left_text
     return is_preceded_by_modal(preceding_text, len(preceding_text))
 
-def generate_fortune_metadata(seed_val):
+def generate_fortune_metadata(seed_val, use_weights=True):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
     if vibe_roll < 85:
-        template = rng.weighted_choice(UPBEAT_TEMPLATES)
+        if use_weights:
+            template = rng.weighted_choice(UPBEAT_TEMPLATES)
+        else:
+            choice_item = rng.choice(UPBEAT_TEMPLATES)
+            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
         vibe = "upbeat"
     else:
-        template = rng.weighted_choice(OMINOUS_TEMPLATES)
+        if use_weights:
+            template = rng.weighted_choice(OMINOUS_TEMPLATES)
+        else:
+            choice_item = rng.choice(OMINOUS_TEMPLATES)
+            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
         vibe = "ominous"
         
     tokens = [{"type": "text", "value": template}]
@@ -1033,6 +1049,7 @@ def get_word_value(word):
 
     def handle_api_fortunes(self, query):
         importlib.reload(fortunes)
+        use_weights = query.get("use_weights", ["1"])[0] == "1"
         badge_id = query.get("badge_id", ["tildagon_badge_fortune"])[0]
         
         # Get date
@@ -1083,7 +1100,7 @@ def get_word_value(word):
                 # Same formula as app.py
                 word_val = fortunes.get_word_value(color_name)
                 path_seed = base_seed + word_val + number * 31
-                metadata = fortunes.generate_fortune_metadata(path_seed)
+                metadata = fortunes.generate_fortune_metadata(path_seed, use_weights=use_weights)
                 fortune_text = "".join(t["value"] for t in metadata["tokens"])
                 paths.append({
                     "color_idx": color_idx,
@@ -1102,7 +1119,7 @@ def get_word_value(word):
         seq_rng = fortunes.SeededRandom(base_seed)
         for i in range(100):
             step_seed = seq_rng.next_int()
-            metadata = fortunes.generate_fortune_metadata(step_seed)
+            metadata = fortunes.generate_fortune_metadata(step_seed, use_weights=use_weights)
             fortune_text = "".join(t["value"] for t in metadata["tokens"])
             sequential.append({
                 "index": i + 1,
@@ -2050,6 +2067,18 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- Generator Settings -->
+                <div class="glass-card sidebar-section">
+                    <h2>Generator Settings</h2>
+                    <div class="switch-container">
+                        <span class="switch-label">Enable Template Weights</span>
+                        <label class="switch">
+                            <input type="checkbox" id="switch-use-weights" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Color Theme configuration -->
                 <div class="glass-card sidebar-section">
                     <h2>Color Theme</h2>
@@ -2302,6 +2331,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         const elBtnApplyDate = document.getElementById('btn-apply-date');
         
         const elSwitchAutoTheme = document.getElementById('switch-auto-theme');
+        const elSwitchUseWeights = document.getElementById('switch-use-weights');
         const elManualThemeGroup = document.getElementById('manual-theme-group');
         const elThemeButtons = document.querySelectorAll('.theme-select-btn');
         const elActiveThemeColors = document.getElementById('active-theme-colors');
@@ -2510,6 +2540,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             });
         });
 
+        elSwitchUseWeights.addEventListener('change', () => {
+            fetchFortunes({ seed: elSeedInput.value });
+        });
+
         elSwitchAutoTheme.addEventListener('change', () => {
             if (elSwitchAutoTheme.checked) {
                 elManualThemeGroup.style.opacity = '0.5';
@@ -2650,8 +2684,13 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         function fetchFortunes(params = {}) {
             elLoadingOverlay.classList.add('active');
             
-            const queryString = Object.keys(params)
-                .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+            const useWeights = elSwitchUseWeights.checked ? '1' : '0';
+            const finalParams = {
+                use_weights: useWeights,
+                ...params
+            };
+            const queryString = Object.keys(finalParams)
+                .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(finalParams[key])}`)
                 .join('&');
 
             fetch(`/api/fortunes?${queryString}`)
@@ -2943,15 +2982,18 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
                 let pool = values;
                 if (pluralOnly) {
-                    pool = values.filter(e => Array.isArray(e) && e[1] === "NOUN:plural");
+                    const filtered = values.filter(e => !Array.isArray(e) || ["NOUN:countable", "NOUN:plural"].includes(e[1]));
+                    if (filtered.length > 0) {
+                        pool = filtered;
+                    }
                 }
 
                 const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
 
                 if (Array.isArray(choice) && ["NOUN:countable", "NOUN:plural", "NOUN:mass"].includes(choice[1])) {
                     const adj = pendingAdjective || "";
-                    const formatted = formatItemJS(adj, choice, rng, !addCollective);
-                    const isPl = (choice[1] === "NOUN:plural" && !formatted.toLowerCase().startsWith("a ") && !formatted.toLowerCase().startsWith("an "));
+                    const formatted = formatItemJS(adj, choice, rng, !addCollective, pluralOnly);
+                    const isPl = (choice[1] === "NOUN:plural" || pluralOnly) && !formatted.toLowerCase().startsWith("a ") && !formatted.toLowerCase().startsWith("an ");
                     if (subjectIsPlural === null) {
                         subjectIsPlural = isPl;
                         activePlural[baseKey] = isPl;
@@ -3063,17 +3105,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         if (values && values.length > 0) {
                             let pool = values;
                             if (pluralOnly) {
-                                pool = values.filter(e => Array.isArray(e) && e[1] === "NOUN:plural");
+                                const filtered = values.filter(e => !Array.isArray(e) || ["NOUN:countable", "NOUN:plural"].includes(e[1]));
+                                if (filtered.length > 0) {
+                                    pool = filtered;
+                                }
                             }
                             const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
-                            displayVal = choice;
-                            isPlural = false;
+                            let displayVal = choice;
+                            let isPlural = false;
                             if (baseKey === 'VILLAGE' || (baseKey === 'DESTINATION' && config.VILLAGES.includes(choice))) {
                                 displayVal = formatVillageJS(choice);
                             } else if (Array.isArray(choice) && ["NOUN:countable", "NOUN:plural", "NOUN:mass"].includes(choice[1])) {
                                 const itype = choice[1];
-                                displayVal = formatItemJS("", choice, rng, !addCollective);
-                                isPlural = (itype === 'NOUN:plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
+                                displayVal = formatItemJS("", choice, rng, !addCollective, pluralOnly);
+                                isPlural = (itype === 'NOUN:plural' || pluralOnly) && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an ");
                             } else if (Array.isArray(choice)) {
                                 // Verb pair
                                 if (activeOnly) {
@@ -3136,7 +3181,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         if (values && values.length > 0) {
                             let pool = values;
                             if (pluralOnly) {
-                                pool = values.filter(e => Array.isArray(e) && e[1] === "NOUN:plural");
+                                const filtered = values.filter(e => !Array.isArray(e) || ["NOUN:countable", "NOUN:plural"].includes(e[1]));
+                                if (filtered.length > 0) {
+                                    pool = filtered;
+                                }
                             }
                             const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
                             let displayVal = choice;
@@ -3145,8 +3193,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                                 displayVal = formatVillageJS(choice);
                             } else if (Array.isArray(choice) && ["NOUN:countable", "NOUN:plural", "NOUN:mass"].includes(choice[1])) {
                                 const itype = choice[1];
-                                displayVal = formatItemJS("", choice, rng, !addCollective);
-                                isPlural = (itype === 'NOUN:plural' && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an "));
+                                displayVal = formatItemJS("", choice, rng, !addCollective, pluralOnly);
+                                isPlural = (itype === 'NOUN:plural' || pluralOnly) && !displayVal.toLowerCase().startsWith("a ") && !displayVal.toLowerCase().startsWith("an ");
                             } else if (Array.isArray(choice)) {
                                 // Verb pair
                                 if (activeOnly) {
@@ -3512,26 +3560,78 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             "flock of"
         ];
 
-        function formatItemJS(adjective, item, rng, noCollective = false) {
-            let name, itype, unit;
+        function pluralizeJS(noun) {
+            if (!noun) return "";
+            const words = noun.split(" ");
+            const word = words[words.length - 1];
+            const lowerWord = word.toLowerCase();
+            let pluralWord;
+
+            if (lowerWord.endsWith("y")) {
+                if (lowerWord.length > 1 && !"aeiou".includes(lowerWord[lowerWord.length - 2])) {
+                    pluralWord = word.substring(0, word.length - 1) + "ies";
+                } else {
+                    pluralWord = word + "s";
+                }
+            } else if (lowerWord.endsWith("s") || lowerWord.endsWith("x") || lowerWord.endsWith("z") || lowerWord.endsWith("ch") || lowerWord.endsWith("sh")) {
+                pluralWord = word + "es";
+            } else if (lowerWord.endsWith("fe")) {
+                pluralWord = word.substring(0, word.length - 2) + "ves";
+            } else if (lowerWord.endsWith("f") && !lowerWord.endsWith("ff")) {
+                pluralWord = word.substring(0, word.length - 1) + "ves";
+            } else {
+                pluralWord = word + "s";
+            }
+
+            words[words.length - 1] = pluralWord;
+            return words.join(" ");
+        }
+
+        function formatItemJS(adjective, item, rng, noCollective = false, forcePlural = false) {
+            let name, itype, unit = null;
+            let isCollective = false;
+            
             if (Array.isArray(item)) {
                 name = item[0];
                 itype = item[1];
-                unit = item.length > 2 ? item[2] : null;
+                
+                const addCollective = !noCollective;
+                if (itype === "NOUN:countable" && addCollective && rng) {
+                    if (((rng.nextInt() >> 8) % 2) === 0) {
+                        unit = rng.choice(COLLECTIVE_PREFIXES_JS);
+                        isCollective = true;
+                    }
+                } else if (itype === "NOUN:plural" && addCollective && rng) {
+                    if (((rng.nextInt() >> 8) % 2) === 0) {
+                        unit = rng.choice(COLLECTIVE_PREFIXES_JS);
+                        isCollective = true;
+                    }
+                }
+                
+                if (itype === "NOUN:plural" && noCollective) {
+                    unit = item.length > 2 ? item[2] : null;
+                }
+                
+                if (forcePlural || isCollective || itype === "NOUN:plural") {
+                    if (itype === "NOUN:countable") {
+                        if (item.length > 2 && item[2]) {
+                            name = item[2];
+                        } else {
+                            name = pluralizeJS(name);
+                        }
+                        itype = "NOUN:plural";
+                    }
+                } else {
+                    unit = null;
+                }
             } else {
                 name = item;
                 itype = "NOUN:countable";
-                unit = null;
-            }
-
-            if (itype === "NOUN:plural" && !unit && !noCollective) {
-                if (rng) {
-                    if (((rng.nextInt() >> 8) % 2) === 0) {
-                        unit = rng.choice(COLLECTIVE_PREFIXES_JS);
-                    }
-                } else {
-                    unit = "gaggle of";
+                if (forcePlural) {
+                    name = pluralizeJS(name);
+                    itype = "NOUN:plural";
                 }
+                unit = null;
             }
 
             if (unit) {
