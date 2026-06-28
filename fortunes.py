@@ -510,7 +510,7 @@ UPBEAT_TEMPLATES = [
     ('Be on the lookout for {TECH_ADJECTIVE+HARDWARE_TARGET} to {HARDWARE_VERB}', 16.127),
     ('Quick! You should be {CAMP_ACTION_ACTIVE}', 28.119),
     ('If you like {TECH_ADJECTIVE+HARDWARE_TARGET}, check {CAMPING_LOCATION}.', 16.127),
-    ('If {CREATURE} makes eye contact, {HACKER_ACTION_PLURAL}.', 16.023),
+    ('If {CREATURE} makes eye contact, {HACKER_ACTION_BASE}.', 16.023),
     ('If {PEOPLE_SUBJECT?mention|mentions} Jonty, change the topic.', 24.048),
     ('If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.', 19.56),
     ('If you see {PEOPLE_SUBJECT}, compliment their outfit.', 24.048),

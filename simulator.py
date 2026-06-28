@@ -443,12 +443,13 @@ def format_item(adjective, item, rng=None, add_collective=False, force_plural=Fa
 
 def _resolve_key(key):
     '''
-    Strip _PLURAL, _COLLECTIVE, and/or _ACTIVE suffixes from a template placeholder key.
-    Returns (base_key, plural_only, add_collective, active_only).
+    Strip _PLURAL, _COLLECTIVE, _ACTIVE, and/or _PAST suffixes from a template placeholder key.
+    Returns (base_key, plural_only, add_collective, active_only, past_only).
     '''
     add_collective = False
     plural_only = False
     active_only = False
+    past_only = False
     if key.endswith("_COLLECTIVE"):
         key = key[:-len("_COLLECTIVE")]
         add_collective = True
@@ -461,7 +462,10 @@ def _resolve_key(key):
     if key.endswith("_ACTIVE"):
         key = key[:-len("_ACTIVE")]
         active_only = True
-    return key, plural_only, add_collective, active_only
+    if key.endswith("_PAST"):
+        key = key[:-len("_PAST")]
+        past_only = True
+    return key, plural_only, add_collective, active_only, past_only
 
 def is_preceded_by_modal(text, index):
     preceding = text[:index].rstrip()
@@ -483,7 +487,7 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
     pending_adjective = None
 
     for part in parts:
-        base_key, plural_only, add_coll, active_only = _resolve_key(part)
+        base_key, plural_only, add_coll, active_only, past_only = _resolve_key(part)
 
         if base_key not in TERMS:
             continue
@@ -515,6 +519,8 @@ def _resolve_chain(chain_key, rng, used_terms, active_plural, force_infinitive=F
             # Verb pair — pick form based on subject plurality or active_plural fallback
             if active_only:
                 val = choice[2] if len(choice) > 2 else choice[0]
+            elif past_only:
+                val = choice[3] if len(choice) > 3 else choice[0]
             elif force_infinitive:
                 val = choice[0]
             elif subject_is_plural is not None:
@@ -607,7 +613,7 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                 force_inf = is_preceded_by_modal(result, idx)
                 choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
             else:
-                base_key, plural_only, add_coll, active_only = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
                     pool = TERMS[base_key]
@@ -623,6 +629,8 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                     elif isinstance(choice, tuple):
                         if active_only:
                             choice = choice[2] if len(choice) > 2 else choice[0]
+                        elif past_only:
+                            choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
                             force_inf = is_preceded_by_modal(result, idx)
                             if force_inf or plural_only:
@@ -671,7 +679,7 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                 result = result[:idx] + choice + result[end_idx+1:]
                 i = idx + len(choice)
             else:
-                base_key, plural_only, add_coll, active_only = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
                     pool = TERMS[base_key]
@@ -687,6 +695,8 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                     elif isinstance(choice, tuple):
                         if active_only:
                             choice = choice[2] if len(choice) > 2 else choice[0]
+                        elif past_only:
+                            choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
                             force_inf = is_preceded_by_modal(result, idx)
                             if force_inf or plural_only:
@@ -802,7 +812,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                 new_tokens.append({"type": "text", "value": suffix_val + right_text})
                 tokens[token_idx:token_idx+1] = new_tokens
             else:
-                base_key, plural_only, add_coll, active_only = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
                     pool = TERMS[base_key]
@@ -820,6 +830,8 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                         raw_choice = choice[0]
                         if active_only:
                             choice = choice[2] if len(choice) > 2 else choice[0]
+                        elif past_only:
+                            choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
                             force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
                             if force_inf or plural_only:
@@ -908,7 +920,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                     new_tokens.append({"type": "text", "value": right_text})
                 tokens[token_idx:token_idx+1] = new_tokens
             else:
-                base_key, plural_only, add_coll, active_only = _resolve_key(key)
+                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
 
                 if base_key in TERMS:
                     pool = TERMS[base_key]
@@ -926,6 +938,8 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                         raw_choice = choice[0]
                         if active_only:
                             choice = choice[2] if len(choice) > 2 else choice[0]
+                        elif past_only:
+                            choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
                             force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
                             if force_inf or plural_only:
@@ -3182,7 +3196,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     } else if (pastOnly) {
                         val = choice[3] || choice[0];
                     } else {
-                        if (forceInfinitive) {
+                        if (forceInfinitive || pluralOnly) {
                             isPl = true;
                         } else if (subjectIsPlural !== null) {
                             isPl = subjectIsPlural;
@@ -3295,7 +3309,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                                     displayVal = choice[3] || choice[0];
                                 } else {
                                     const forceInf = isPrecededByModalJS(result, idx);
-                                    if (forceInf) {
+                                    if (forceInf || pluralOnly) {
                                         displayVal = choice[0];
                                     } else {
                                         const keys = Object.keys(activePlural);
@@ -3371,7 +3385,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                                     displayVal = choice[3] || choice[0];
                                 } else {
                                     const forceInf = isPrecededByModalJS(result, idx);
-                                    if (forceInf) {
+                                    if (forceInf || pluralOnly) {
                                         displayVal = choice[0];
                                     } else {
                                         const keys = Object.keys(activePlural);
