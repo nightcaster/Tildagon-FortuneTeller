@@ -3293,10 +3293,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                                 }
                             }
                             const choice = chooseUniqueJS(rng, pool.length > 0 ? pool : values, usedTerms);
-                            let displayVal = choice;
-                            let isPlural = false;
                             if (baseKey === 'VILLAGE' || (baseKey === 'DESTINATION' && config.VILLAGES.includes(choice))) {
                                 displayVal = formatVillageJS(choice);
+                                isPlural = false;
                             } else if (Array.isArray(choice) && ["NOUN:countable", "NOUN:plural", "NOUN:mass"].includes(choice[1])) {
                                 const itype = choice[1];
                                 displayVal = formatItemJS("", choice, rng, !addCollective, pluralOnly);
@@ -3320,6 +3319,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                                 isPlural = false;
                             } else {
                                 displayVal = choice;
+                                isPlural = false;
                             }
                             
                             activePlural[baseKey] = isPlural;
