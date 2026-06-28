@@ -186,7 +186,7 @@ TERMS = {
         ("spider", "NOUN:countable"),
         ("sentient hexpansion", "NOUN:countable", "hexpansions"),
         ("rogue deer", "NOUN:countable", "rogue deer"),
-        ("WorldOfTechno", "NOUN:mass"),
+        ("World'O'Techno", "NOUN:mass"),
         ("volunteers", "NOUN:plural"),
     ],
     "COMPUTE_VERB": [
