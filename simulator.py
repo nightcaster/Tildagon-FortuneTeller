@@ -209,7 +209,7 @@ class SimulatorRequestHandler(http.server.BaseHTTPRequestHandler):
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write("# fortunes.py\n")
                 f.write("import math\n\n")
-                f.write("# Seeded pseudo-random number generator (LCG) for deterministic selection\n")
+                f.write("USE_WEIGHTS = True\nINVERT_WEIGHTS = False\n\n# Seeded pseudo-random number generator (LCG) for deterministic selection\n")
                 f.write("class SeededRandom:\n")
                 f.write("    def __init__(self, seed_val):\n")
                 f.write("        self.state = seed_val & 0xFFFFFFFF\n")
@@ -539,7 +539,7 @@ def choose_unique(rng, values, used_terms):
     used_terms.add(raw)
     return choice
 
-def generate_fortune(seed_val, use_weights=True, invert_weights=False):
+def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WEIGHTS):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
@@ -726,7 +726,7 @@ def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
     preceding_text += left_text
     return is_preceded_by_modal(preceding_text, len(preceding_text))
 
-def generate_fortune_metadata(seed_val, use_weights=True, invert_weights=False):
+def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WEIGHTS):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100

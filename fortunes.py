@@ -1,6 +1,9 @@
 # fortunes.py
 import math
 
+USE_WEIGHTS = True
+INVERT_WEIGHTS = False
+
 # Seeded pseudo-random number generator (LCG) for deterministic selection
 class SeededRandom:
     def __init__(self, seed_val):
@@ -810,7 +813,7 @@ def choose_unique(rng, values, used_terms):
     used_terms.add(raw)
     return choice
 
-def generate_fortune(seed_val, use_weights=True, invert_weights=False):
+def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WEIGHTS):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
@@ -1001,7 +1004,7 @@ def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
     preceding_text += left_text
     return is_preceded_by_modal(preceding_text, len(preceding_text))
 
-def generate_fortune_metadata(seed_val, use_weights=True, invert_weights=False):
+def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WEIGHTS):
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
