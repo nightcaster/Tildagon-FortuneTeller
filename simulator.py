@@ -3977,17 +3977,81 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         function populateCategoryDropdown() {
             elDictCategorySelect.innerHTML = '';
             
-            const categories = [
-                { key: 'MAP_LOCATIONS', label: 'MAP LOCATIONS (campsite areas)' },
-                { key: 'VILLAGES', label: 'VILLAGES (EMF villages list)' },
-                ...Object.keys(config.TERMS).map(k => ({ key: k, label: k }))
+            const groups = [
+                {
+                    label: "Nouns & Objects",
+                    keys: [
+                        { key: 'PEOPLE_SUBJECT', label: 'PEOPLE_SUBJECT (nouns)' },
+                        { key: 'CREATURE', label: 'CREATURE (nouns)' },
+                        { key: 'ACTIVE_DEVICE', label: 'ACTIVE_DEVICE (nouns)' },
+                        { key: 'TECH_ITEM', label: 'TECH_ITEM (nouns)' },
+                        { key: 'TECH_SHINY_ITEM', label: 'TECH_SHINY_ITEM (nouns)' },
+                        { key: 'TECH_RARE_ITEM', label: 'TECH_RARE_ITEM (nouns)' },
+                        { key: 'CRAFT_ITEM', label: 'CRAFT_ITEM (nouns)' },
+                        { key: 'HARDWARE_TARGET', label: 'HARDWARE_TARGET (nouns)' },
+                        { key: 'SOCIAL_OBJECT', label: 'SOCIAL_OBJECT (nouns)' },
+                        { key: 'BENCH_TOOL', label: 'BENCH_TOOL (nouns)' },
+                        { key: 'CAMPING_ITEM', label: 'CAMPING_ITEM (nouns)' },
+                        { key: 'ABSURD_OBJECT', label: 'ABSURD_OBJECT (nouns)' },
+                        { key: 'HAZARD', label: 'HAZARD (nouns)' },
+                        { key: 'FESTIVAL_INFRASTRUCTURE', label: 'FESTIVAL_INFRASTRUCTURE (nouns)' }
+                    ]
+                },
+                {
+                    label: "Verbs & Actions",
+                    keys: [
+                        { key: 'COMPUTE_VERB', label: 'COMPUTE_VERB (verbs)' },
+                        { key: 'HARDWARE_VERB', label: 'HARDWARE_VERB (verbs)' },
+                        { key: 'SOCIAL_VERB', label: 'SOCIAL_VERB (verbs)' },
+                        { key: 'CAMP_ACTION', label: 'CAMP_ACTION (verbs)' }
+                    ]
+                },
+                {
+                    label: "Adjectives & Adverbs",
+                    keys: [
+                        { key: 'TECH_ADJECTIVE', label: 'TECH_ADJECTIVE (adjectives)' },
+                        { key: 'CRAFT_ADJECTIVE', label: 'CRAFT_ADJECTIVE (adjectives)' },
+                        { key: 'HACKER_ADVERB', label: 'HACKER_ADVERB (adverbs)' }
+                    ]
+                },
+                {
+                    label: "Places, Times & Phrases",
+                    keys: [
+                        { key: 'MAP_LOCATIONS', label: 'MAP LOCATIONS (campsite areas)' },
+                        { key: 'VILLAGES', label: 'VILLAGES (EMF villages list)' },
+                        { key: 'CAMPING_LOCATION', label: 'CAMPING_LOCATION (places)' },
+                        { key: 'TIME', label: 'TIME (time phrases)' },
+                        { key: 'SPECIAL_DEVICE_FEATURE', label: 'SPECIAL_DEVICE_FEATURE (phrases)' },
+                        { key: 'TECH_TRIVIA', label: 'TECH_TRIVIA (phrases)' },
+                        { key: 'LUCKY_NUMBER', label: 'LUCKY_NUMBER (numbers)' }
+                    ]
+                }
             ];
 
-            categories.forEach(cat => {
-                const opt = document.createElement('option');
-                opt.value = cat.key;
-                opt.innerText = cat.label;
-                elDictCategorySelect.appendChild(opt);
+            const definedKeys = new Set();
+            groups.forEach(g => g.keys.forEach(k => definedKeys.add(k.key)));
+            definedKeys.add('MAP_LOCATION');
+            definedKeys.add('VILLAGE');
+            definedKeys.add('DESTINATION');
+            
+            const extraKeys = Object.keys(config.TERMS).filter(k => !definedKeys.has(k));
+            if (extraKeys.length > 0) {
+                groups.push({
+                    label: "Other Categories",
+                    keys: extraKeys.map(k => ({ key: k, label: k }))
+                });
+            }
+
+            groups.forEach(g => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = g.label;
+                g.keys.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat.key;
+                    opt.innerText = cat.label;
+                    optgroup.appendChild(opt);
+                });
+                elDictCategorySelect.appendChild(optgroup);
             });
 
             elDictCategorySelect.addEventListener('change', () => {
@@ -3998,8 +4062,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         function renderDictionaryTab() {
             if (elDictCategorySelect.value) {
                 renderCategoryTerms(elDictCategorySelect.value);
-            } else if (elDictCategorySelect.firstElementChild) {
-                renderCategoryTerms(elDictCategorySelect.firstElementChild.value);
+            } else {
+                const firstOption = elDictCategorySelect.querySelector('option');
+                if (firstOption) {
+                    elDictCategorySelect.value = firstOption.value;
+                    renderCategoryTerms(firstOption.value);
+                }
             }
         }
 
