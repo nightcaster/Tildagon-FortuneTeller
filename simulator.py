@@ -622,7 +622,7 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                             choice = choice[2] if len(choice) > 2 else choice[0]
                         else:
                             force_inf = is_preceded_by_modal(result, idx)
-                            if force_inf:
+                            if force_inf or plural_only:
                                 choice = choice[0]
                             elif active_plural:
                                 choice = choice[0] if list(active_plural.values())[-1] else choice[1]
@@ -686,7 +686,7 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                             choice = choice[2] if len(choice) > 2 else choice[0]
                         else:
                             force_inf = is_preceded_by_modal(result, idx)
-                            if force_inf:
+                            if force_inf or plural_only:
                                 choice = choice[0]
                             elif active_plural:
                                 choice = choice[0] if list(active_plural.values())[-1] else choice[1]
@@ -819,7 +819,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                             choice = choice[2] if len(choice) > 2 else choice[0]
                         else:
                             force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
-                            if force_inf:
+                            if force_inf or plural_only:
                                 choice = choice[0]
                             elif active_plural:
                                 choice = choice[0] if list(active_plural.values())[-1] else choice[1]
@@ -925,7 +925,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                             choice = choice[2] if len(choice) > 2 else choice[0]
                         else:
                             force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
-                            if force_inf:
+                            if force_inf or plural_only:
                                 choice = choice[0]
                             elif active_plural:
                                 choice = choice[0] if list(active_plural.values())[-1] else choice[1]

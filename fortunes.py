@@ -420,6 +420,11 @@ TERMS = {
 
     # ==========================================
     # 4. VERBS & ACTIONS
+    # Verb entries are 4-tuples: (Base/Plural, Singular, Continuous, Past)
+    #   - Index 0: Base / Plural / Infinitive (e.g. "debug") -> used with plural subjects, or forced using suffix "_PLURAL" (e.g. {HACKER_ACTION_PLURAL})
+    #   - Index 1: Singular present (e.g. "debugs") -> used with singular subjects
+    #   - Index 2: Continuous / Active (e.g. "debugging") -> forced using suffix "_ACTIVE"
+    #   - Index 3: Past tense (e.g. "debugged") -> forced using suffix "_PAST"
     # ==========================================
     "COMPUTE_VERB": [
         ("debug", "debugs", "debugging", "debugged"),
@@ -500,12 +505,12 @@ TERMS = {
 UPBEAT_TEMPLATES = [
     ('You might see Jonty {TIME} {HARDWARE_VERB_ACTIVE} {FESTIVAL_INFRASTRUCTURE} using {CREATURE_PLURAL_COLLECTIVE}.', 12.2),
     ('{TECH_ADJECTIVE+TECH_ITEM} gives your {ACTIVE_DEVICE} {SPECIAL_DEVICE_FEATURE}.', 10.567),
-    ('A mysterious firmware update signed by Kliment grants your Tildagon {SPECIAL_DEVICE_FEATURE}.', 10.2),
+    ('A mysterious firmware update signed by Kliment grants your Tildagon {SPECIAL_DEVICE_FEATURE}.', 3),
     ('A ping on port 8081 {TIME} signals incoming {TECH_ADJECTIVE+CREATURE_PLURAL}', 12.489),
     ('Be on the lookout for {TECH_ADJECTIVE+HARDWARE_TARGET} to {HARDWARE_VERB}', 16.127),
     ('Quick! You should be {CAMP_ACTION_ACTIVE}', 28.119),
     ('If you like {TECH_ADJECTIVE+HARDWARE_TARGET}, check {CAMPING_LOCATION}.', 16.127),
-    ('If {CREATURE} makes eye contact, {HACKER_ACTION}.', 16.023),
+    ('If {CREATURE} makes eye contact, {HACKER_ACTION_PLURAL}.', 16.023),
     ('If {PEOPLE_SUBJECT?mention|mentions} Jonty, change the topic.', 24.048),
     ('If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.', 19.56),
     ('If you see {PEOPLE_SUBJECT}, compliment their outfit.', 24.048),
@@ -923,7 +928,7 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                             choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
                             force_inf = is_preceded_by_modal(result, idx)
-                            if force_inf:
+                            if force_inf or plural_only:
                                 choice = choice[0]
                             elif active_plural:
                                 choice = choice[0] if list(active_plural.values())[-1] else choice[1]
@@ -989,7 +994,7 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                             choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
                             force_inf = is_preceded_by_modal(result, idx)
-                            if force_inf:
+                            if force_inf or plural_only:
                                 choice = choice[0]
                             elif active_plural:
                                 choice = choice[0] if list(active_plural.values())[-1] else choice[1]
@@ -1124,7 +1129,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                             choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
                             force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
-                            if force_inf:
+                            if force_inf or plural_only:
                                 choice = choice[0]
                             elif active_plural:
                                 choice = choice[0] if list(active_plural.values())[-1] else choice[1]
@@ -1232,7 +1237,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                             choice = choice[3] if len(choice) > 3 else choice[0]
                         else:
                             force_inf = is_token_preceded_by_modal(tokens, token_idx, left_text)
-                            if force_inf:
+                            if force_inf or plural_only:
                                 choice = choice[0]
                             elif active_plural:
                                 choice = choice[0] if list(active_plural.values())[-1] else choice[1]
