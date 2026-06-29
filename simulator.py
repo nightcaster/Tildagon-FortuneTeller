@@ -17,7 +17,7 @@ except ImportError:
     print("Error: Could not import fortunes.py. Make sure you run the simulator from the folder containing fortunes.py")
     sys.exit(1)
 
-# Themes definitions from fortune_teller.py
+# Themes definitions from app.py
 THEMES = [
     # Theme 0 – PRIMARY FLIP
     [
@@ -1132,7 +1132,7 @@ def get_word_value(word):
                 visible_numbers = [1, 3, 5, 7, 9, 11]
                 
             for number in visible_numbers:
-                # Same formula as fortune_teller.py
+                # Same formula as app.py
                 word_val = fortunes.get_word_value(color_name)
                 path_seed = base_seed + word_val + number * 31
                 metadata = fortunes.generate_fortune_metadata(path_seed, use_weights=use_weights, invert_weights=invert_weights)

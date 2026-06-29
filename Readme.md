@@ -51,7 +51,7 @@ While Version 3 advertised over 8 million raw combinations, it suffered from gra
 
 ## Development and Testing
 
-Upload the application files (`fortune_teller.py`, `fortunes.py`, `tildagon.toml`, `__init__.py`) to the case-sensitive `:apps/FortuneTeller` folder on the Tildagon badge (for example, using `mpremote fs cp`).
+Upload the application files (`app.py`, `fortunes.py`, `tildagon.toml`, `__init__.py`) to the case-sensitive `:apps/FortuneTeller` folder on the Tildagon badge (for example, using `mpremote fs cp`).
 
 
 ## Fortune Reviewer & Simulator

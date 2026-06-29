@@ -1,1 +1,1 @@
-from .fortune_teller import FortuneTellerApp
+from .app import FortuneTellerApp
