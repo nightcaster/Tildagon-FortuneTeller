@@ -466,7 +466,6 @@ class FortuneTellerApp(app.App):
         rgb_float = tuple(c / 255.0 for c in self.selected_color_rgb)
         ctx.rgb(*rgb_float)
         R_outer = 150  # Enlarged to keep base edges outside the circular screen
-
         for i in range(6):
             # Base angle for this triangle, advanced by rotation_offset each fold
             theta_left = rotation_offset + i * math.pi / 3.0

@@ -17,7 +17,7 @@ except ImportError:
     print("Error: Could not import fortunes.py. Make sure you run the simulator from the folder containing fortunes.py")
     sys.exit(1)
 
-# Themes definitions from app.py
+# Themes definitions from fortune_teller.py
 THEMES = [
     # Theme 0 – PRIMARY FLIP
     [
@@ -662,7 +662,7 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                     continue
 
             suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-            if suffix and suffix[0].isalnum():
+            if suffix and (('a' <= suffix[0] <= 'z') or ('A' <= suffix[0] <= 'Z') or ('0' <= suffix[0] <= '9')):
                 val = choice + " " + suffix
             else:
                 val = choice + suffix
@@ -793,7 +793,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                 choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
                 raw_choice = choice
                 suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                if suffix and suffix[0].isalnum():
+                if suffix and (('a' <= suffix[0] <= 'z') or ('A' <= suffix[0] <= 'Z') or ('0' <= suffix[0] <= '9')):
                     suffix_val = " " + suffix
                 else:
                     suffix_val = suffix
@@ -848,7 +848,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                     active_plural[base_key + "_COLLECTIVE"] = is_plural
 
                     suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                    if suffix and suffix[0].isalnum():
+                    if suffix and (('a' <= suffix[0] <= 'z') or ('A' <= suffix[0] <= 'Z') or ('0' <= suffix[0] <= '9')):
                         suffix_val = " " + suffix
                     else:
                         suffix_val = suffix
@@ -878,7 +878,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                     active_plural[key] = is_plural
 
                     suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                    if suffix and suffix[0].isalnum():
+                    if suffix and (('a' <= suffix[0] <= 'z') or ('A' <= suffix[0] <= 'Z') or ('0' <= suffix[0] <= '9')):
                         suffix_val = " " + suffix
                     else:
                         suffix_val = suffix
@@ -1132,7 +1132,7 @@ def get_word_value(word):
                 visible_numbers = [1, 3, 5, 7, 9, 11]
                 
             for number in visible_numbers:
-                # Same formula as app.py
+                # Same formula as fortune_teller.py
                 word_val = fortunes.get_word_value(color_name)
                 path_seed = base_seed + word_val + number * 31
                 metadata = fortunes.generate_fortune_metadata(path_seed, use_weights=use_weights, invert_weights=invert_weights)

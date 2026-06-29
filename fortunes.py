@@ -6,6 +6,7 @@ INVERT_WEIGHTS = False
 
 # Seeded pseudo-random number generator (LCG) for deterministic selection
 class SeededRandom:
+
     def __init__(self, seed_val):
         self.state = seed_val & 0xFFFFFFFF
         if self.state == 0:
@@ -966,7 +967,7 @@ def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WE
                     continue
 
             suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-            if suffix and suffix[0].isalnum():
+            if suffix and (('a' <= suffix[0] <= 'z') or ('A' <= suffix[0] <= 'Z') or ('0' <= suffix[0] <= '9')):
                 val = choice + " " + suffix
             else:
                 val = choice + suffix
@@ -1097,7 +1098,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                 choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural)
                 raw_choice = choice
                 suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                if suffix and suffix[0].isalnum():
+                if suffix and (('a' <= suffix[0] <= 'z') or ('A' <= suffix[0] <= 'Z') or ('0' <= suffix[0] <= '9')):
                     suffix_val = " " + suffix
                 else:
                     suffix_val = suffix
@@ -1152,7 +1153,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                     active_plural[base_key + "_COLLECTIVE"] = is_plural
 
                     suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                    if suffix and suffix[0].isalnum():
+                    if suffix and (('a' <= suffix[0] <= 'z') or ('A' <= suffix[0] <= 'Z') or ('0' <= suffix[0] <= '9')):
                         suffix_val = " " + suffix
                     else:
                         suffix_val = suffix
@@ -1182,7 +1183,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
                     active_plural[key] = is_plural
 
                     suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                    if suffix and suffix[0].isalnum():
+                    if suffix and (('a' <= suffix[0] <= 'z') or ('A' <= suffix[0] <= 'Z') or ('0' <= suffix[0] <= '9')):
                         suffix_val = " " + suffix
                     else:
                         suffix_val = suffix
