@@ -21,7 +21,7 @@ A MicroPython application for the EMF 2024/2026 Tildagon Badge. This app emulate
 
 ## Template Syntax & Fortune Resolution
 
-The application dynamically generates fortunes from templates (defined in `fortunes.py`) using a rule-based parser that handles grammar, plurality, and verb forms:
+The application dynamically generates fortunes from templates (defined in [fortunes.py](file:///c:/Users/danni/OneDrive/Documents/Tildagon/FortuneTeller/fortunes.py)) using a rule-based parser that handles grammar, plurality, and verb forms:
 
 1. **Placeholders:** Basic tokens like `{CREATURE}` or `{MAP_LOCATION}` are randomly chosen from corresponding pools in the `TERMS` dictionary.
 2. **Chaining (`+`):** Multiple tags can be chained together (e.g. `{PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB}`). The parser resolves each element left-to-right:
@@ -33,7 +33,21 @@ The application dynamically generates fortunes from templates (defined in `fortu
    - If a chain doesn't contain a subject noun (e.g. `{HACKER_ADVERB+SOCIAL_VERB}`), the verb falls back to agree with the most recently resolved noun.
 4. **Modal Verbs:** If the verb (or chain containing a verb) is preceded by a modal or infinitive marker (such as `will`, `would`, `shall`, `should`, `can`, `could`, `may`, `might`, `must`, `to`), the parser automatically forces the verb into its infinitive/plural form (e.g. `"will quietly discover"` instead of `"will quietly discovers"`).
 5. **Conditional Suffixes (`?`):** You can append conditional text based on the resolved tag's plurality, formatted as `{TAG?plural_suffix|singular_suffix}` (e.g. `{PEOPLE_SUBJECT?are coding late|is coding late}`).
-6. **Template Weighting:** Templates are stored as tuples `(template_string, weight)` (e.g., `("If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.", 19.56)`). The engine uses a deterministic weighted random selection to pick templates, allowing control over the rarity of different sentence structures.
+   - **Referential Conditional Suffix:** You can reference the plurality of a previously resolved tag anywhere later in the template using `{TAG?plural_value|singular_value}` (e.g., `{PEOPLE_SUBJECT?are|is}`).
+6. **Suffix Modifiers for Verbs:**
+   - Append `_BASE` or `_PLURAL` (e.g. `{HACKER_ACTION_BASE}`) to force the verb into its base/infinitive form.
+   - Append `_ACTIVE` (e.g. `{CAMP_ACTION_ACTIVE}`) or `_PAST` to extract the present-participle (-ing) or past-tense form of the verb.
+7. **Template Weighting:** Templates are stored as tuples `(template_string, weight)` (e.g., `("If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.", 19.56)`). The engine uses a deterministic weighted random selection to pick templates, allowing control over the rarity of different sentence structures.
+
+## Improvements in Version 4 (Over Version 3)
+
+While Version 3 advertised over 8 million raw combinations, it suffered from grammatical inconsistencies, redundant/unnatural phrasing, and flat random distribution. Version 4 scales the combination pool to a highly optimized and polished **2+ million combinations**, representing a major leap in quality:
+
+* **Mass Noun & Collective Prefix Support:** Correctly formats mass nouns (e.g. "felt", "soldering flux") by mapping them to appropriate units (e.g. "a sheet of felt", "a roll of soldering flux") instead of prepending them with incorrect articles.
+* **Deterministic Template Weighting:** Rather than all templates sharing the same likelihood, templates now feature weighted probabilities to introduce true "rarity levels" for predictions (e.g. rare/humorous fortunes have lower weights).
+* **Referential Plurality Resolution:** Improved parser logic to remember the plurality of previously resolved terms, enabling secondary sentences to match (e.g. resolving `{CREATURE_PLURAL}` correctly formats subsequent `{CREATURE_PLURAL?are|is}` matches).
+* **Verb Tense Suffixes (`_BASE`, `_ACTIVE`, `_PAST`):** Suffix routing allows templates to dictate the exact verb forms required, resolving awkward present/past tense mismatches.
+* **Deduplication & Term Consolidation:** Streamlined the dictionary by moving adjectives out of hardcoded noun pools and into a generic adjective system, eliminating duplicates and preventing awkward nested phrasing.
 
 ## Development and Testing
 
