@@ -3792,6 +3792,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 
                 if (itype === "NOUN:plural" && noCollective) {
                     unit = item.length > 2 ? item[2] : null;
+                } else if (itype === "NOUN:mass" && item.length > 2) {
+                    unit = item[2];
                 }
                 
                 if (forcePlural || isCollective || itype === "NOUN:plural") {
@@ -3803,7 +3805,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         }
                         itype = "NOUN:plural";
                     }
-                } else {
+                } else if (itype !== "NOUN:mass") {
                     unit = null;
                 }
             } else {
@@ -4720,6 +4722,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </html>
 """
 
+class SimulatorHTTPServer(http.server.HTTPServer):
+    allow_reuse_address = False
+
 def main():
     # Setup server
     port = 8080
@@ -4728,12 +4733,14 @@ def main():
     server_address = (host, port)
     
     try:
-        httpd = http.server.HTTPServer(server_address, SimulatorRequestHandler)
+        httpd = SimulatorHTTPServer(server_address, SimulatorRequestHandler)
     except OSError:
-        # Port is already busy, find another free port
-        port = find_free_port()
-        server_address = (host, port)
-        httpd = http.server.HTTPServer(server_address, SimulatorRequestHandler)
+        print("=" * 60)
+        print(f"Error: Port {port} is already in use.")
+        print("A Fortune Teller Simulator instance might already be running.")
+        print("Please close any existing instances or free up the port, then try again.")
+        print("=" * 60)
+        sys.exit(1)
 
     url = f"http://{host}:{port}/"
     print("=" * 60)
@@ -4756,3 +4763,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

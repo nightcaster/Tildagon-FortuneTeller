@@ -409,12 +409,10 @@ TERMS = {
         "over-caffeinated hackers",
     ],
     "FESTIVAL_INFRASTRUCTURE": [
-        ("stuck telehandler", "NOUN:countable"),
-        ("stuck van", "NOUN:countable"),
         ("the DECT phone system", "NOUN:mass"),
         ("the fibre backbone", "NOUN:mass"),
         ("the Wi-Fi infrastructure", "NOUN:mass"),
-        ("a soiled Datenklo", "NOUN:mass"),
+        ("soiled Datenklo", "NOUN:countable"),
     ],
 
     # ==========================================
@@ -503,52 +501,57 @@ TERMS = {
 
 UPBEAT_TEMPLATES = [
     ('A mysterious firmware update signed by Kliment grants your Tildagon {SPECIAL_DEVICE_FEATURE}.', 3),
-    ('You might see Jonty {TIME}, {HARDWARE_VERB_ACTIVE} {FESTIVAL_INFRASTRUCTURE} using {CREATURE_PLURAL_COLLECTIVE}.', 12.2),
-    ('If {PEOPLE_SUBJECT?mention|mentions} Jonty, change the topic.', 12.048),
+    ('You will see Jonty {TIME}, {HARDWARE_VERB_ACTIVE} {FESTIVAL_INFRASTRUCTURE} using {CREATURE_PLURAL_COLLECTIVE}.', 12.2),
+    ('{COMPUTE_VERB} and the path forward will become clear.', 12.048),
+    ('The answer lies in {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 12.048),
+    ('Prediction unavailable. Please insert more {CREATURE_PLURAL}.', 14),
+    ('If {PEOPLE_SUBJECT?are coding late|is coding late}, make them some tea!.', 24.048),
+    ('{CREATURE?are|is} not what they seem...', 24.048),
+    ('While {HACKER_ACTION_ACTIVE}, you will discover {TECH_ADJECTIVE+CREATURE_PLURAL}.', 12.048),
     ('{TECH_ADJECTIVE+TECH_ITEM} gives your {ACTIVE_DEVICE} {SPECIAL_DEVICE_FEATURE}.', 15.567),
     ('Looking for {TECH_ADJECTIVE+HARDWARE_TARGET}? Check {CAMPING_LOCATION}!', 22.127),
     ('A ping on port 8081 {TIME} signals incoming {TECH_ADJECTIVE+CREATURE_PLURAL}', 12.489),
     ('{TECH_ADJECTIVE+HARDWARE_TARGET} will need to be {HARDWARE_VERB_PAST}', 16.127),
     ('Quick! You should be {CAMP_ACTION_ACTIVE}', 28.119),
-    ('If {CREATURE} makes eye contact, {HACKER_ACTION_BASE}.', 16.023),
-    ('If you see {CREATURE_PLURAL}, offer them {CAMPING_ITEM}.', 19.56),
-    ('If you see {PEOPLE_SUBJECT}, compliment their outfit.', 24.048),
-    ('If you see {TECH_ADJECTIVE+HARDWARE_TARGET}, admire it from afar.', 22.17),
+    ('If {CREATURE?make|makes} eye contact, {HACKER_ACTION_BASE}.', 16.023),
+    ('{CRAFT_ADJECTIVE+CREATURE_PLURAL} will attempt to eat {CAMPING_ITEM}.', 19.56),
+    ('{PEOPLE_SUBJECT} will {HACKER_ACTION_BASE} if you compliment their outfit.', 24.048),
+    ('{TECH_ADJECTIVE+HARDWARE_TARGET} brings great opportunity.', 28.17),
     ('You will find fame and fortune {CAMPING_LOCATION}.', 27.099),
-    ('{CREATURE?are|is} not what they seem...', 24.048),
-    ('If {PEOPLE_SUBJECT?are coding late|is coding late}, make them some tea!.', 24.048),
-]
-DEFAULT_TEMPLATES = [
-    ('{PEOPLE_SUBJECT} will {HACKER_ADVERB+SOCIAL_VERB} {CREATURE}.', 9.879),
-    ('Try {CAMP_ACTION_ACTIVE} at {DESTINATION}.', 12.869),
+    ('{PEOPLE_SUBJECT} can be found {CAMP_ACTION_ACTIVE}.', 12.048),
+    ('{DESTINATION} is the place to be {TIME}.', 12.869),
     ('Your code will finally compile after {VISIT_TYPE} {MAP_LOCATION}.', 15.466),
     ('{CREATURE_PLURAL_COLLECTIVE} riding {CREATURE_PLURAL} will bring great fortune to {VILLAGE}.', 8.873),
-    ('{PEOPLE_SUBJECT_COLLECTIVE} will {CAMP_ACTION} .', 12.825),
+    ('Your moment will be when {PEOPLE_SUBJECT_COLLECTIVE} is {CAMP_ACTION_ACTIVE} .', 12.825),
     ('{VISIT_TYPE} {VILLAGE} will inspire you to {CAMP_ACTION}.', 10.483),
     ('{CREATURE} will {SOCIAL_VERB+PEOPLE_SUBJECT} near {MAP_LOCATION}.', 9.363),
     ('You will discover {CRAFT_ADJECTIVE+CRAFT_ITEM} while trying to {HACKER_ACTION}.', 12.247),
-    ('Your {ACTIVE_DEVICE} will flawlessly {COMPUTE_VERB} {COMPUTE_TARGET}.', 13.018),
-    ('While trying to {HACKER_ACTION} at {DESTINATION}, {ABSURD_OBJECT} will appear.', 10.149),
-    ('You will meet {PEOPLE_SUBJECT_COLLECTIVE} who will help you {HACKER_ACTION}.', 12.014),
-    ('To {CAMP_ACTION}, you must first find {TECH_ADJECTIVE+TECH_ITEM}.', 12.608),
-    ('To {CAMP_ACTION}, you must first obtain {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 13.091),
-    ('If you {CAMP_ACTION} {TIME}, you might find {TECH_ADJECTIVE+TECH_ITEM}.', 9.911),
-    ('If you {CAMP_ACTION} {TIME}, you might create {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 10.207),
-    ('A talk about {TECH_TRIVIA} will explain how to easily {HACKER_ACTION}.', 16.023),
+    ('Walk exactly {LUCKY_NUMBER} steps today and tommorrow will be favourable', 15.504),
+    ('Your {ACTIVE_DEVICE} will flawlessly {COMPUTE_VERB_BASE} {COMPUTE_TARGET}.', 13.018),
+    ('While trying to {HACKER_ACTION_BASE} at {DESTINATION}, {ABSURD_OBJECT} will appear.', 10.149),
+    ('You will meet {PEOPLE_SUBJECT_COLLECTIVE} who will help you {HACKER_ACTION_BASE}.', 12.014),
+    ('To {CAMP_ACTION_BASE}, you must first find {TECH_ADJECTIVE+TECH_ITEM}.', 12.608),
+    ('To {CAMP_ACTION_BASE}, you must first obtain {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 13.091),
+    ('{CAMP_ACTION_BASE} {TIME}, you might find {TECH_ADJECTIVE+TECH_ITEM}.', 9.911),
+    ('{CAMP_ACTION_BASE} {TIME} to aquire {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 10.207),
+    ('A talk about {TECH_TRIVIA} will explain how to easily {HACKER_ACTION_BASE}.', 21.023),
     ('You will find luck when you {COMPUTE_VERB} {COMPUTE_TARGET}.', 16.691),
     ('Fortune awaits when you {HARDWARE_VERB} {TECH_ADJECTIVE+HARDWARE_TARGET}.', 16.127),
-    ('{PEOPLE_SUBJECT} at {DESTINATION} will offer you {TECH_SHINY_ITEM} in exchange for debugging assistance.', 9.564),
+    ('{PEOPLE_SUBJECT} at {DESTINATION} will offer you {TECH_ADJECTIVE+TECH_ITEM} in exchange for {HACKER_ACTION_ACTIVE}.', 9.564),
     ('Your {BENCH_TOOL} will work better near {VILLAGE}.', 13.104),
-    ('If you visit {DESTINATION} {TIME}, you might get to {CAMP_ACTION}.', 10.071),
-    ('{PEOPLE_SUBJECT} at {DESTINATION} will help you {HACKER_ACTION}.', 9.564),
-    ('To trade {TECH_RARE_ITEM} with {PEOPLE_SUBJECT}, you should visit {DESTINATION}.', 9.564),
+    ('If you visit {DESTINATION} {TIME}, you will find an opportunity to {CAMP_ACTION}.', 10.071),
+    ('{PEOPLE_SUBJECT} at {DESTINATION} will help you {HACKER_ACTION_BASE}.', 9.564),
+    ('To trade {TECH_ADJECTIVE+TECH_ITEM} with {PEOPLE_SUBJECT}, you should visit {DESTINATION}.', 9.564),
     ('A session at {VILLAGE} will teach you all about {TECH_TRIVIA}.', 12.146),
-    ('Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {TECH_ADJECTIVE+TECH_ITEM}.', 11.719),
-    ('Your luckiest number is {LUCKY_NUMBER} and your luckiest item is {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 12.134),
-    ('A mysterious friendly signal at {DESTINATION} suggests you should immediately {CAMP_ACTION}.', 12.869),
+    ('Remember "{LUCKY_NUMBER}" when you find {TECH_ADJECTIVE+TECH_ITEM}.', 11.719),
+    ('Your lucky number is {LUCKY_NUMBER}.', 12.134),
+    ('Keep {CRAFT_ADJECTIVE+CRAFT_ITEM} on you at all times today.', 12.134),
+    ('A mysterious signal at {DESTINATION} suggests you should {CAMP_ACTION_BASE}.', 12.869),
 ]
+
 OMINOUS_TEMPLATES = [
     ('Beware of {HAZARD} when you {CAMP_ACTION}.', 16.925),
+    ('You will meet a new nemesis {CAMPING_LOCATION}.', 15.06),
     ('You will meet a new nemesis while trying to {HACKER_ACTION} at the {MAP_LOCATION}.', 15.06),
     ('Beware of {CREATURE_PLURAL} bearing {SOCIAL_OBJECT}.', 21.007),
     ('Beware of {CREATURE_PLURAL} near {DESTINATION}.', 12.869),
@@ -558,16 +561,18 @@ OMINOUS_TEMPLATES = [
     ('{TIME}, you will spend hours attempting to explain {TECH_TRIVIA} to {CREATURE}.', 11.799),
     ('A mysterious flashing LED at {DESTINATION} is actually an ominous message about {TECH_TRIVIA}.', 11.943),
     ('Your {ACTIVE_DEVICE} will fail due to {HAZARD}.', 16.55),
-    ('You will accidentally trade your {ACTIVE_DEVICE} for {TECH_ADJECTIVE+TECH_ITEM}.', 12.399),
+    ('{CREATURE_PLURAL} will switch your {ACTIVE_DEVICE} for {TECH_ADJECTIVE+TECH_ITEM}.', 12.399),
     ('You will accidentally trade your {ACTIVE_DEVICE} for {CRAFT_ADJECTIVE+CRAFT_ITEM}.', 12.865),
     ('Beware of {CREATURE} trying to {COMPUTE_VERB} your unprotected {ACTIVE_DEVICE}.', 12.892),
     ('Beware of {CREATURE} trying to {HARDWARE_VERB} your unguarded {ACTIVE_DEVICE}.', 13.265),
     ('If you see {HAZARD} creeping around {DESTINATION}, take shelter at {MAP_LOCATION}.', 8.989),
     ('If you see Jonty sprinting toward {DESTINATION}, do not ask questions. Do not follow him.', 16.092),
-    ('Jonty will challenge you to a game of chance behind {MAP_LOCATION}.', 21.942),
+    ('Jonty will challenge you to a game of chance behind {MAP_LOCATION}.', 8.942),
     ('Beware of {HAZARD} when compiling code for {ACTIVE_DEVICE}.', 16.55),
     ('{PEOPLE_SUBJECT} will {CAMP_ACTION} despite being advised not to.', 17.499),
     ('Your {ACTIVE_DEVICE} will slowly begin to resent you for not {CAMP_ACTION_ACTIVE}', 19.06),
+    ('Outlook uncertain. Please try a different path.', 20.123),
+    ('Do not collude with {CREATURE_PLURAL}.', 20.123),
 ]
 
 def format_village(name, context_before):
@@ -705,6 +710,8 @@ def format_item(adjective, item, rng=None, add_collective=False, force_plural=Fa
                 
         if itype == "NOUN:plural" and not add_collective:
             unit = item[2] if len(item) > 2 else None
+        elif itype == "NOUN:mass" and len(item) > 2:
+            unit = item[2]
 
         if force_plural or is_collective or itype == "NOUN:plural":
             if itype == "NOUN:countable":
@@ -713,7 +720,7 @@ def format_item(adjective, item, rng=None, add_collective=False, force_plural=Fa
                 else:
                     name = pluralize(name)
                 itype = "NOUN:plural"
-        else:
+        elif itype != "NOUN:mass":
             unit = None
     else:
         name = item
