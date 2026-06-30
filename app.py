@@ -500,11 +500,11 @@ class FortuneTellerApp(app.App):
         ctx.font_size = FONT_SIZE_TITLE
         ctx.text_align = ctx.CENTER
         ctx.text_baseline = ctx.MIDDLE
-        ctx.move_to(0, -10).text("FORTUNE")
-        ctx.move_to(0, 10).text("TELLER")
+        ctx.move_to(0, -25).text("FORTUNE")
+        ctx.move_to(0, -5).text("TELLER")
         ctx.font_size = FONT_SIZE_SUBTITLE
         ctx.rgb(0.7, 0.7, 0.7)
-        ctx.move_to(0, 30).text("Press a color corner")
+        ctx.move_to(0, 15).text("Press a color corner")
         ctx.move_to(0, 45).text("[Hold F to exit]")
         ctx.restore()
         
