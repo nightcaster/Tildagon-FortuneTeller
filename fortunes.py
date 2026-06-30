@@ -574,6 +574,7 @@ OMINOUS_TEMPLATES = [
     ('Your {ACTIVE_DEVICE} will slowly begin to resent you for not {CAMP_ACTION_ACTIVE}', 19.06),
     ('Outlook uncertain. Please try a different path.', 20.123),
     ('Do not collude with {CREATURE_PLURAL}.', 20.123),
+    ('An orphan source is currently {CAMPING_LOCATION}!', 10)
 ]
 
 def format_village(name, context_before):
