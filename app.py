@@ -7,6 +7,7 @@ from tildagonos import tildagonos
 from system.eventbus import eventbus
 from app_components import clear_background
 from system.patterndisplay.events import PatternDisable, PatternEnable
+from app_components.background import Background as bg
 
 try:
     import settings
@@ -389,6 +390,8 @@ class FortuneTellerApp(app.App):
                         self._set_selection_leds()
 
     def update(self, delta_ticks: float) -> bool:
+        bg.update(delta_ticks)
+        
         delta_seconds = delta_ticks / 1000.0
         
         if self.cancel_is_held:
@@ -438,12 +441,13 @@ class FortuneTellerApp(app.App):
         t_eased = 1.0 - math.pow(1.0 - sin_p, 3)  # Cubic cushion
         scale = 1.0 - t_eased
 
-        ctx.save()
-        clear_background(ctx)
+        # ctx.save()
+        # clear_background(ctx)
+        bg.draw(ctx)
 
         # Black background
-        ctx.rgb(0.0, 0.0, 0.0)
-        ctx.rectangle(-120, -120, 240, 240).fill()
+        # ctx.rgb(0.0, 0.0, 0.0)
+        # ctx.rectangle(-120, -120, 240, 240).fill()
 
         # Central character label
         label_fold_index = current_fold_index + 1
@@ -487,8 +491,9 @@ class FortuneTellerApp(app.App):
         ctx.restore()
 
     def _draw_color_selection(self, ctx):
-        clear_background(ctx)
-        
+        # clear_background(ctx)
+        bg.draw(ctx)
+
         # Title/Prompt in the center
         ctx.save()
         ctx.rgb(1.0, 1.0, 1.0)
@@ -524,8 +529,9 @@ class FortuneTellerApp(app.App):
             ctx.restore()
 
     def _draw_number_selection(self, ctx):
-        clear_background(ctx)
-        
+        # clear_background(ctx)
+        bg.draw(ctx)
+
         # Prompt in the center
         ctx.save()
         ctx.rgb(1.0, 1.0, 1.0)
@@ -560,7 +566,8 @@ class FortuneTellerApp(app.App):
             ctx.restore()
 
     def _draw_fortune_display(self, ctx):
-        clear_background(ctx)
+        # clear_background(ctx)
+        bg.draw(ctx)
         
         # Pulse color circle in background or border
         ctx.save()
