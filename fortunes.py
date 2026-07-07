@@ -609,7 +609,7 @@ OMINOUS_TEMPLATES = [
     ('Outlook uncertain. Please try a different path.', 20.123),
     ('Do not collude with {CREATURE_PLURAL}.', 20.123),
     ('An orphan source is currently {CAMPING_LOCATION}!', 10),
-    ('Beware creatures bringing unsolicited {PART_SUPPLIER} deliveries', 12.0)
+    ('Beware {CREATURE_PLURAL} bringing unsolicited {PART_SUPPLIER} deliveries', 12.0)
 ]
 
 def format_village(name, context_before):
