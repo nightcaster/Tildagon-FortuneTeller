@@ -383,6 +383,15 @@ TERMS = {
         ("your camping chair", "NOUN:mass"),
         ("your backpack", "NOUN:mass"),
     ],
+    "PART_SUPPLIER": [
+        "DigiKey",
+        "Mouser",
+        "Farnell",
+        "RS Components",
+        "LCSC",
+        "Adafruit",
+        "SparkFun",
+    ],
     "ABSURD_OBJECT": [
         ("duck", "NOUN:countable"),
         ("bratwurst", "NOUN:countable"),
@@ -548,6 +557,7 @@ UPBEAT_TEMPLATES = [
     ('Your lucky number is {LUCKY_NUMBER}.', 12.134),
     ('Keep {CRAFT_ADJECTIVE+CRAFT_ITEM} on you at all times today.', 12.134),
     ('A mysterious signal at {DESTINATION} suggests you should {CAMP_ACTION_BASE}.', 12.869),
+    ('you will receive a strange gift from {PART_SUPPLIER}', 12.0),
 ]
 
 OMINOUS_TEMPLATES = [
@@ -574,7 +584,8 @@ OMINOUS_TEMPLATES = [
     ('Your {ACTIVE_DEVICE} will slowly begin to resent you for not {CAMP_ACTION_ACTIVE}', 19.06),
     ('Outlook uncertain. Please try a different path.', 20.123),
     ('Do not collude with {CREATURE_PLURAL}.', 20.123),
-    ('An orphan source is currently {CAMPING_LOCATION}!', 10)
+    ('An orphan source is currently {CAMPING_LOCATION}!', 10),
+    ('Beware creatures bringing unsolicited {PART_SUPPLIER} deliveries', 12.0)
 ]
 
 def format_village(name, context_before):
