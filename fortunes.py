@@ -392,6 +392,29 @@ TERMS = {
         "Adafruit",
         "SparkFun",
     ],
+    "SPONSOR": [
+        "Nationwide",
+        "Foundry Zero",
+        "zzoomm",
+        "FullFIbre",
+        "MathWorks",
+        "Antithesis",
+        "cside",
+        "Grafana",
+        "Mythic Beasts",
+        "Onega",
+        "UTAW",
+        "Codemyriad",
+        "Coretech-Security",
+        "FEng Ltd",
+        "Bosch Sensortec",
+        "Espressif",
+        "NextPCB",
+        "Texas Instruments",
+        "standby, please",
+        "Pimoroni",
+        "Hookdeck",
+    ],
     "ABSURD_OBJECT": [
         ("duck", "NOUN:countable"),
         ("bratwurst", "NOUN:countable"),
@@ -558,6 +581,7 @@ UPBEAT_TEMPLATES = [
     ('Keep {CRAFT_ADJECTIVE+CRAFT_ITEM} on you at all times today.', 12.134),
     ('A mysterious signal at {DESTINATION} suggests you should {CAMP_ACTION_BASE}.', 12.869),
     ('you will receive a strange gift from {PART_SUPPLIER}', 12.0),
+    ('You will be pleasantly surprised with your next {SPONSOR} purchase', 12.0),
 ]
 
 OMINOUS_TEMPLATES = [
