@@ -549,188 +549,8 @@ def choose_unique(rng, values, used_terms):
     return choice
 
 def generate_fortune(seed_val, use_weights=USE_WEIGHTS, invert_weights=INVERT_WEIGHTS):
-    rng = SeededRandom(seed_val)
-    
-    vibe_roll = rng.next_int() % 100
-    if vibe_roll < 85:
-        if use_weights:
-            template = rng.weighted_choice(UPBEAT_TEMPLATES, invert=invert_weights)
-        else:
-            choice_item = rng.choice(UPBEAT_TEMPLATES)
-            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
-    else:
-        if use_weights:
-            template = rng.weighted_choice(OMINOUS_TEMPLATES, invert=invert_weights)
-        else:
-            choice_item = rng.choice(OMINOUS_TEMPLATES)
-            template = choice_item[0] if isinstance(choice_item, (list, tuple)) else choice_item
-        
-    result = template
-    used_terms = set()
-
-    # Resolve compound placeholders first
-    while "{TECH_ADJECTIVE_ITEM}" in result:
-        adj = choose_unique(rng, TERMS["TECH_ADJECTIVE"], used_terms)
-        item = choose_unique(rng, TERMS["TECH_ITEM"], used_terms)
-        val = format_item(adj, item, rng)
-        result = result.replace("{TECH_ADJECTIVE_ITEM}", val, 1)
-
-    while "{CRAFT_ADJECTIVE_ITEM}" in result:
-        adj = choose_unique(rng, TERMS["CRAFT_ADJECTIVE"], used_terms)
-        item = choose_unique(rng, TERMS["CRAFT_ITEM"], used_terms)
-        val = format_item(adj, item, rng)
-        result = result.replace("{CRAFT_ADJECTIVE_ITEM}", val, 1)
-
-    while "{TECH_SHINY_ITEM}" in result:
-        item = choose_unique(rng, TERMS["TECH_ITEM"], used_terms)
-        val = format_item("shiny", item, rng)
-        result = result.replace("{TECH_SHINY_ITEM}", val, 1)
-
-    while "{TECH_RARE_ITEM}" in result:
-        item = choose_unique(rng, TERMS["TECH_ITEM"], used_terms)
-        val = format_item("rare", item, rng)
-        result = result.replace("{TECH_RARE_ITEM}", val, 1)
-
-    active_plural = {}
-    i = 0
-    while True:
-        idx = result.find("{", i)
-        if idx == -1:
-            break
-        end_idx = result.find("}", idx)
-        if end_idx == -1:
-            break
-
-        tag = result[idx+1:end_idx]
-
-        if "?" in tag:
-            parts = tag.split("?")
-            key = parts[0]
-            options = parts[1].split("|")
-
-            if "+" in key:
-                # Chain with conditional suffix: e.g. "{PEOPLE_SUBJECT+SOCIAL_VERB?themselves|themself}"
-                force_inf = is_preceded_by_modal(result, idx)
-                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
-            else:
-                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
-
-                if base_key in TERMS:
-                    pool = TERMS[base_key]
-                    if plural_only:
-                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
-                        if filtered:
-                            pool = filtered
-                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
-                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
-                        itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
-                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
-                    elif isinstance(choice, tuple):
-                        if active_only:
-                            choice = choice[2] if len(choice) > 2 else choice[0]
-                        elif past_only:
-                            choice = choice[3] if len(choice) > 3 else choice[0]
-                        else:
-                            force_inf = is_preceded_by_modal(result, idx)
-                            if force_inf or plural_only:
-                                choice = choice[0]
-                            elif active_plural:
-                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
-                            else:
-                                choice = choice[0]
-                        is_plural = False
-                    else:
-                        is_plural = False  # plain string: use as-is
-
-                    active_plural[base_key] = is_plural
-                    active_plural[base_key + "_COLLECTIVE"] = is_plural
-                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
-                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
-                    choice = choose_unique(rng, values, used_terms)
-                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                        context_before = result[max(0, idx - 20):idx]
-                        choice = format_village(choice, context_before)
-                    is_plural = False
-                    active_plural[key] = is_plural
-                else:
-                    # Reference to a previously resolved key's plurality
-                    is_plural = active_plural.get(key, False)
-                    verb = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-                    result = result[:idx] + verb + result[end_idx+1:]
-                    i = idx + len(verb)
-                    continue
-
-            suffix = options[0] if is_plural else options[1] if len(options) > 1 else options[0]
-            if suffix and (('a' <= suffix[0] <= 'z') or ('A' <= suffix[0] <= 'Z') or ('0' <= suffix[0] <= '9')):
-                val = choice + " " + suffix
-            else:
-                val = choice + suffix
-            result = result[:idx] + val + result[end_idx+1:]
-            i = idx + len(val)
-        else:
-            # Standard placeholder
-            key = tag
-
-            if "+" in key:
-                # Chain: e.g. "{PEOPLE_SUBJECT+HACKER_ADVERB+SOCIAL_VERB}"
-                force_inf = is_preceded_by_modal(result, idx)
-                choice, is_plural = _resolve_chain(key, rng, used_terms, active_plural, force_infinitive=force_inf)
-                result = result[:idx] + choice + result[end_idx+1:]
-                i = idx + len(choice)
-            else:
-                base_key, plural_only, add_coll, active_only, past_only = _resolve_key(key)
-
-                if base_key in TERMS:
-                    pool = TERMS[base_key]
-                    if plural_only:
-                        filtered = [e for e in pool if not isinstance(e, tuple) or e[1] in ("NOUN:countable", "NOUN:plural")]
-                        if filtered:
-                            pool = filtered
-                    choice = choose_unique(rng, pool or TERMS[base_key], used_terms)
-                    if isinstance(choice, tuple) and choice[1] in _NOUN_TYPES:
-                        itype = choice[1]
-                        choice = format_item("", choice, rng, add_collective=add_coll, force_plural=plural_only)
-                        is_plural = (itype == "NOUN:plural" or plural_only) and not choice.lower().startswith(("a ", "an "))
-                    elif isinstance(choice, tuple):
-                        if active_only:
-                            choice = choice[2] if len(choice) > 2 else choice[0]
-                        elif past_only:
-                            choice = choice[3] if len(choice) > 3 else choice[0]
-                        else:
-                            force_inf = is_preceded_by_modal(result, idx)
-                            if force_inf or plural_only:
-                                choice = choice[0]
-                            elif active_plural:
-                                choice = choice[0] if list(active_plural.values())[-1] else choice[1]
-                            else:
-                                choice = choice[0]
-                        is_plural = False
-                    else:
-                        is_plural = False  # plain string: use as-is
-
-                    active_plural[base_key] = is_plural
-                    active_plural[base_key + "_COLLECTIVE"] = is_plural
-
-                    result = result[:idx] + choice + result[end_idx+1:]
-                    i = idx + len(choice)
-                elif key in ("MAP_LOCATION", "VILLAGE", "DESTINATION"):
-                    values = MAP_LOCATIONS if key == "MAP_LOCATION" else VILLAGES if key == "VILLAGE" else (MAP_LOCATIONS + VILLAGES)
-                    choice = choose_unique(rng, values, used_terms)
-                    if key == "VILLAGE" or (key == "DESTINATION" and choice in VILLAGES):
-                        context_before = result[max(0, idx - 20):idx]
-                        choice = format_village(choice, context_before)
-                    active_plural[key] = False
-                    result = result[:idx] + choice + result[end_idx+1:]
-                    i = idx + len(choice)
-                else:
-                    i = end_idx + 1
-
-    if result:
-        result = result[0].upper() + result[1:]
-        result = fix_a_an(result)
-        result = remove_possessive_articles(result)
-    return result
+    meta = generate_fortune_metadata(seed_val, use_weights, invert_weights)
+    return "".join(t["value"] for t in meta["tokens"])
 
 def is_token_preceded_by_modal(tokens, token_idx, left_text=""):
     preceding_text = ""
@@ -743,7 +563,7 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
     rng = SeededRandom(seed_val)
     
     vibe_roll = rng.next_int() % 100
-    if vibe_roll < 85:
+    if vibe_roll < 75:
         if use_weights:
             template = rng.weighted_choice(UPBEAT_TEMPLATES, invert=invert_weights)
         else:
@@ -2221,7 +2041,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         <!-- Upbeat Templates Column -->
                         <div class="templates-col glass-card">
                             <h3 style="color: var(--accent-cyan); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-size: 1.15rem;">
-                                <span>Upbeat Templates (85% probability)</span>
+                                <span>Upbeat Templates (75% probability)</span>
                                 <button class="btn btn-accent" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;" id="btn-add-upbeat-template">+ Add</button>
                             </h3>
                             <div id="upbeat-templates-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 500px; overflow-y: auto; padding-right: 0.25rem;">
@@ -2232,7 +2052,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                         <!-- Ominous Templates Column -->
                         <div class="templates-col glass-card">
                             <h3 style="color: var(--accent-purple); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-size: 1.15rem;">
-                                <span>Ominous Templates (15% probability)</span>
+                                <span>Ominous Templates (25% probability)</span>
                                 <button class="btn btn-accent" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;" id="btn-add-ominous-template">+ Add</button>
                             </h3>
                             <div id="ominous-templates-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 500px; overflow-y: auto; padding-right: 0.25rem;">
@@ -2490,7 +2310,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
             const rng = new SeededRandomJS(seedVal);
             const vibeRoll = rng.nextInt() % 100;
-            const templateList = vibeRoll < 85 ? config.UPBEAT_TEMPLATES : config.OMINOUS_TEMPLATES;
+            const templateList = vibeRoll < 75 ? config.UPBEAT_TEMPLATES : config.OMINOUS_TEMPLATES;
             if (!templateList || templateList.length === 0) {
                 elDirectLookupResult.style.display = 'block';
                 elDirectLookupResult.style.color = '#ff6b6b';
@@ -2509,7 +2329,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             const fortune = generateFortuneJS(template, rng);
             elDirectLookupResult.style.display = 'block';
             elDirectLookupResult.style.color = 'var(--accent-cyan)';
-            elDirectLookupResult.innerHTML = `<strong>Fortune:</strong> "${fortune}"<br><span style="font-size:0.8rem;opacity:0.8;display:block;margin-top:0.25rem;">(Template: ${template} &bull; Vibe: ${vibeRoll < 85 ? 'upbeat' : 'ominous'})</span>`;
+            elDirectLookupResult.innerHTML = `<strong>Fortune:</strong> "${fortune}"<br><span style="font-size:0.8rem;opacity:0.8;display:block;margin-top:0.25rem;">(Template: ${template} &bull; Vibe: ${vibeRoll < 75 ? 'upbeat' : 'ominous'})</span>`;
         });
 
         elInputDirectSeed.addEventListener('keypress', (e) => {
@@ -2902,7 +2722,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             const invertWeights = elSwitchInvertWeights ? elSwitchInvertWeights.checked : false;
             
             const list = vibe === "upbeat" ? config.UPBEAT_TEMPLATES : config.OMINOUS_TEMPLATES;
-            const vibeProb = vibe === "upbeat" ? 0.85 : 0.15;
+            const vibeProb = vibe === "upbeat" ? 0.75 : 0.25;
             
             if (!useWeights) {
                 return (vibeProb / list.length) * 100;
