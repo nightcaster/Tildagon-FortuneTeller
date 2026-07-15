@@ -3,6 +3,7 @@ import math
 
 USE_WEIGHTS = True
 INVERT_WEIGHTS = False
+SCHEDULE_EVENTS = []
 
 # Seeded pseudo-random number generator (LCG) for deterministic selection
 class SeededRandom:
@@ -584,6 +585,19 @@ UPBEAT_TEMPLATES = [
     ('You will be pleasantly surprised with your next {SPONSOR} purchase', 12.0),
 ]
 
+_SCHEDULE_TEMPLATES_ADDED = False
+
+def add_schedule_templates():
+    global _SCHEDULE_TEMPLATES_ADDED
+    if not _SCHEDULE_TEMPLATES_ADDED:
+        UPBEAT_TEMPLATES.extend([
+            ('The best outcome is found at {ITEM.OCURRAENCES[N].VENUE} for the {ITEM.TYPE} "{ITEM.TITLE}" at {ITEM.OCURRAENCES[N].START_TIME} later today.', 10.0),
+            ('The "{ITEM.TITLE}" {ITEM.TYPE} in {X_MINUTES} at {ITEM.OCURRAENCES[N].VENUE} will have the answers.', 10.0),
+            ('Find {ABSURD_OBJECT} before "{ITEM.TITLE}" at {ITEM.OCURRAENCES[N].VENUE} starting in {X_MINUTES}.', 10.0)
+        ])
+        _SCHEDULE_TEMPLATES_ADDED = True
+
+
 OMINOUS_TEMPLATES = [
     ('Beware of {HAZARD} when you {CAMP_ACTION}.', 16.925),
     ('You will meet a new nemesis {CAMPING_LOCATION}.', 15.06),
@@ -922,6 +936,8 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
     tokens = [{"type": "text", "value": template}]
     used_terms = set()
     active_plural = {}
+    selected_event = None
+
 
     token_idx = 0
     while token_idx < len(tokens):
@@ -945,6 +961,49 @@ def generate_fortune_metadata(seed_val, use_weights=USE_WEIGHTS, invert_weights=
         left_text = val[:idx]
         right_text = val[end_idx+1:]
         
+        # Check for schedule tags
+        if tag in ("ITEM.OCURRAENCES[N].VENUE", "ITEM.TYPE", "ITEM.TITLE", "ITEM.OCURRAENCES[N].START_TIME", "X_MINUTES"):
+            if selected_event is None:
+                if SCHEDULE_EVENTS:
+                    selected_event = rng.choice(SCHEDULE_EVENTS)
+                else:
+                    selected_event = {
+                        "title": "EMF Camp Talk",
+                        "type": "talk",
+                        "venue": "Stage A",
+                        "start_time": "12:00",
+                        "minutes_away": 30
+                    }
+            
+            if tag == "ITEM.TITLE":
+                choice = selected_event["title"]
+            elif tag == "ITEM.TYPE":
+                choice = selected_event["type"]
+            elif tag == "ITEM.OCURRAENCES[N].VENUE":
+                choice = selected_event["venue"]
+            elif tag == "ITEM.OCURRAENCES[N].START_TIME":
+                choice = selected_event["start_time"]
+            elif tag == "X_MINUTES":
+                choice = str(selected_event["minutes_away"])
+                
+            active_plural[tag] = False
+            
+            new_tokens = []
+            if left_text:
+                new_tokens.append({"type": "text", "value": left_text})
+            new_tokens.append({
+                "type": "term",
+                "key": tag,
+                "value": choice,
+                "raw_value": choice,
+                "adj": "",
+                "add_collective": False
+            })
+            if right_text:
+                new_tokens.append({"type": "text", "value": right_text})
+            tokens[token_idx:token_idx+1] = new_tokens
+            continue
+
         if "?" in tag:
             parts = tag.split("?")
             key = parts[0]

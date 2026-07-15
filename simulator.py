@@ -4542,10 +4542,98 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </html>
 """
 
+def fetch_simulator_schedule():
+    try:
+        import urllib.request
+        import json
+        from datetime import datetime
+        
+        # Try 2026 first, then 2024
+        url = "https://www.emfcamp.org/schedule/2026.json?type=talk"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        try:
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = response.read()
+        except Exception:
+            url = "https://www.emfcamp.org/schedule/2024.json?type=talk"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = response.read()
+                
+        events = json.loads(data.decode('utf-8'))
+        
+        now = datetime.now()
+        matching = []
+        for event in events:
+            title = event.get("title", "")
+            ev_type = event.get("type", "talk")
+            for occ in event.get("occurrences", []):
+                start_date_str = occ.get("start_date")
+                if not start_date_str:
+                    continue
+                try:
+                    occ_dt = datetime.strptime(start_date_str, "%Y-%m-%d %H:%M:%S")
+                    if occ_dt.date() == now.date():
+                        diff_mins = (occ_dt - now).total_seconds() / 60.0
+                        if diff_mins >= 30:
+                            matching.append({
+                                "title": title,
+                                "type": ev_type,
+                                "venue": occ.get("venue", "Unknown Venue"),
+                                "start_time": occ.get("start_time", "00:00"),
+                                "minutes_away": int(diff_mins)
+                            })
+                except Exception:
+                    pass
+                    
+        # Fallback to simulate matching the first day with events if no events today
+        if not matching and events:
+            first_date = None
+            for event in events:
+                for occ in event.get("occurrences", []):
+                    start_date_str = occ.get("start_date")
+                    if start_date_str:
+                        first_date = start_date_str.split(" ")[0]
+                        break
+                if first_date:
+                    break
+            
+            if first_date:
+                sim_now = datetime.strptime(f"{first_date} 10:00:00", "%Y-%m-%d %H:%M:%S")
+                for event in events:
+                    title = event.get("title", "")
+                    ev_type = event.get("type", "talk")
+                    for occ in event.get("occurrences", []):
+                        start_date_str = occ.get("start_date")
+                        if not start_date_str:
+                            continue
+                        try:
+                            occ_dt = datetime.strptime(start_date_str, "%Y-%m-%d %H:%M:%S")
+                            if occ_dt.date() == sim_now.date():
+                                diff_mins = (occ_dt - sim_now).total_seconds() / 60.0
+                                if diff_mins >= 30:
+                                    matching.append({
+                                        "title": title,
+                                        "type": ev_type,
+                                        "venue": occ.get("venue", "Unknown Venue"),
+                                        "start_time": occ.get("start_time", "00:00"),
+                                        "minutes_away": int(diff_mins)
+                                    })
+                        except Exception:
+                            pass
+                            
+        if matching:
+            fortunes.SCHEDULE_EVENTS = matching
+            fortunes.add_schedule_templates()
+            print(f"Simulator: Loaded {len(matching)} EMF schedule events.")
+    except Exception as e:
+        print(f"Simulator: Could not load EMF schedule: {e}")
+
 class SimulatorHTTPServer(http.server.HTTPServer):
     allow_reuse_address = False
 
 def main():
+    fetch_simulator_schedule()
     # Setup server
     port = 8080
     host = "localhost"

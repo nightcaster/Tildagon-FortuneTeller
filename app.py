@@ -135,6 +135,124 @@ def get_current_date():
     except Exception:
         return 2026, 6, 4
 
+def parse_http_date(date_str):
+    try:
+        parts = date_str.strip().split(" ")
+        day_str = parts[1].strip(",")
+        month_str = parts[2]
+        year_str = parts[3]
+        time_str = parts[4]
+        
+        day = int(day_str)
+        year = int(year_str)
+        
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        month = months.index(month_str[:3]) + 1
+        
+        time_parts = time_str.split(":")
+        hour = int(time_parts[0])
+        minute = int(time_parts[1])
+        second = int(time_parts[2])
+        
+        return year, month, day, hour, minute, second
+    except Exception as e:
+        print("Failed to parse HTTP date header:", date_str, e)
+        return None
+
+def update_system_time(year, month, day, hour, minute, second):
+    if machine and hasattr(machine, "RTC"):
+        try:
+            try:
+                epoch = time.mktime((year, month, day, hour, minute, second, 0, 0, -1))
+            except Exception:
+                try:
+                    epoch = time.mktime((year, month, day, hour, minute, second, 0, 0))
+                except Exception:
+                    epoch = None
+            
+            if epoch is not None:
+                if 4 <= month <= 10:
+                    epoch += 3600
+                local_t = time.localtime(epoch)
+                rtc = machine.RTC()
+                rtc.datetime((local_t[0], local_t[1], local_t[2], local_t[6], local_t[3], local_t[4], local_t[5], 0))
+                print("Fortune Teller: RTC synced to local time:", time.localtime())
+        except Exception as e:
+            print("Fortune Teller: Failed to sync RTC:", e)
+
+def parse_occurrence_time_diff(start_date_str, current_time):
+    try:
+        parts = start_date_str.split(" ")
+        date_part = parts[0]
+        time_part = parts[1]
+        
+        y_c, m_c, d_c, H_c, M_c = current_time[:5]
+        
+        y, m, d = map(int, date_part.split("-"))
+        if (y, m, d) != (y_c, m_c, d_c):
+            return None
+            
+        time_parts = time_part.split(":")
+        H = int(time_parts[0])
+        M = int(time_parts[1])
+        
+        diff_minutes = (H - H_c) * 60 + (M - M_c)
+        return diff_minutes
+    except Exception:
+        return None
+
+def stream_events_generator(stream):
+    buffer = []
+    brace_level = 0
+    in_string = False
+    escape = False
+    
+    while True:
+        try:
+            chunk = stream.read(512)
+        except Exception as e:
+            print("Stream read error:", e)
+            break
+        if not chunk:
+            break
+        if isinstance(chunk, bytes):
+            chunk = chunk.decode('utf-8', 'ignore')
+            
+        for char in chunk:
+            if in_string:
+                if escape:
+                    escape = False
+                elif char == '\\':
+                    escape = True
+                elif char == '"':
+                    in_string = False
+                if brace_level > 0:
+                    buffer.append(char)
+            else:
+                if char == '"':
+                    in_string = True
+                    if brace_level > 0:
+                        buffer.append(char)
+                elif char == '{':
+                    brace_level += 1
+                    buffer.append(char)
+                elif char == '}':
+                    brace_level -= 1
+                    if brace_level >= 0:
+                        buffer.append(char)
+                    if brace_level == 0:
+                        event_str = "".join(buffer)
+                        buffer = []
+                        try:
+                            import json
+                            yield json.loads(event_str)
+                        except Exception:
+                            pass
+                else:
+                    if brace_level > 0:
+                        buffer.append(char)
+
+
 def date_to_days(year, month, day):
     if month <= 2:
         month += 12
@@ -190,6 +308,10 @@ class FortuneTellerApp(app.App):
         # Register events
         eventbus.on(ButtonDownEvent, self._handle_buttondown, self)
         eventbus.on(ButtonUpEvent, self._handle_buttonup, self)
+
+        # Schedule the background fetch of the schedule
+        self._schedule_fetch_task = asyncio.create_task(self._fetch_schedule_async())
+
 
     def _pick_daily_theme(self):
         """Select a theme from THEMES using today's daily seed, ensuring no repeats for 3 days."""
@@ -644,6 +766,95 @@ class FortuneTellerApp(app.App):
             ctx.move_to(0, -10).text("Keep holding CANCEL")
             ctx.move_to(0, 10).text(f"to exit in {rem}s...")
             ctx.restore()
+
+    async def _fetch_schedule_async(self):
+        """Asynchronously fetch the schedule over Wi-Fi, update RTC, and extract upcoming events."""
+        # Wait a short moment to let the system settle
+        await asyncio.sleep(0.5)
+        
+        try:
+            import network
+            wlan = network.WLAN(network.STA_IF)
+            for _ in range(5):
+                if wlan.isconnected():
+                    break
+                await asyncio.sleep(1.0)
+            
+            if not wlan.isconnected():
+                print("Fortune Teller: Wi-Fi not connected. Using offline/standard fortunes.")
+                return
+        except Exception as e:
+            print("Fortune Teller: Failed to check Wi-Fi:", e)
+            return
+
+        y, m, d = get_current_date()
+        year_to_fetch = 2026 if y < 2026 else y
+            
+        url = f"https://www.emfcamp.org/schedule/{year_to_fetch}.json?type=talk"
+        print(f"Fortune Teller: Fetching schedule from {url}")
+        
+        try:
+            import urequests
+            response = urequests.get(url, stream=True)
+            
+            if response.status_code != 200:
+                print(f"Fortune Teller: Failed to fetch {url}, status code: {response.status_code}")
+                if year_to_fetch != 2024:
+                    url = "https://www.emfcamp.org/schedule/2024.json?type=talk"
+                    response = urequests.get(url, stream=True)
+                    if response.status_code != 200:
+                        return
+                else:
+                    return
+            
+            # Sync system time from Date header
+            date_hdr = response.headers.get("date")
+            if date_hdr:
+                utc_time = parse_http_date(date_hdr)
+                if utc_time:
+                    update_system_time(*utc_time)
+            
+            # Get current time after clock sync
+            current_time = time.localtime()
+            matching_events = []
+            
+            # Parse response stream
+            for event in stream_events_generator(response.raw):
+                title = event.get("title", "")
+                ev_type = event.get("type", "talk")
+                occurrences = event.get("occurrences", [])
+                
+                for occ in occurrences:
+                    start_date_str = occ.get("start_date")
+                    if not start_date_str:
+                        continue
+                    
+                    diff_mins = parse_occurrence_time_diff(start_date_str, current_time)
+                    if diff_mins is not None and diff_mins >= 30:
+                        matching_events.append({
+                            "title": title,
+                            "type": ev_type,
+                            "venue": occ.get("venue", "Unknown Venue"),
+                            "start_time": occ.get("start_time", "00:00"),
+                            "minutes_away": diff_mins
+                        })
+                        if len(matching_events) >= 100:
+                            break
+                if len(matching_events) >= 100:
+                    break
+                    
+            response.close()
+            
+            if matching_events:
+                from . import fortunes
+                fortunes.SCHEDULE_EVENTS = matching_events
+                fortunes.add_schedule_templates()
+                print(f"Fortune Teller: Loaded {len(matching_events)} upcoming schedule events.")
+            else:
+                print("Fortune Teller: No upcoming schedule events found today.")
+                
+        except Exception as e:
+            print("Fortune Teller: Error fetching/parsing schedule:", e)
 
     async def run(self, render_update):
         self._render_update = render_update
