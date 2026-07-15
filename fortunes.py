@@ -189,7 +189,7 @@ TERMS = {
     "DESTINATION": MAP_LOCATIONS + VILLAGES,
     "CAMPING_LOCATION": [
         ("inside your socks", "NOUN:mass"),
-        ("in the depth of your sleeping bag", "NOUN:mass"),
+        ("in the depths of your sleeping bag", "NOUN:mass"),
         ("in the bowels of your tent", "NOUN:mass"),
         ("in the queue for the showers", "NOUN:mass"),
         ("near the toilets", "NOUN:mass"),
