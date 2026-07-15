@@ -582,6 +582,14 @@ UPBEAT_TEMPLATES = [
     ('A mysterious signal at {DESTINATION} suggests you should {CAMP_ACTION_BASE}.', 12.869),
     ('you will receive a strange gift from {PART_SUPPLIER}', 12.0),
     ('You will be pleasantly surprised with your next {SPONSOR} purchase', 12.0),
+    ('Slip, Slop, Slap!', 12.0),
+    ('Be careful in the heat.', 12.0),
+    ('Please stay hydrated.', 12.0),
+    ('Please visit the First Aid and Welfare tents if you feel unwell.', 12.0),
+    ('Enjoy the power and beauty of your youth.', 12.0),
+    ('Worrying is as effective as trying to solve an algebra equation by chewing bubble gum.', 12.0),
+    ('Don\'t waste your time on jealousy. The race is long and in the end, it\'s only with yourself.', 12.0),
+    ('Be kind to your knees. You\'ll miss them when they\'re gone.', 12.0),
 ]
 
 OMINOUS_TEMPLATES = [
